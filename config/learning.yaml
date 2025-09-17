@@ -1,0 +1,33 @@
+version: 1
+
+profiles:
+  - name: informatica-cloud
+    documents:
+      - path: /data/IICS/data/IICS_September2022_REST-API_Reference_en.pdf
+        type: pdf
+
+    vectordb:
+      kind: qdrant
+      url: http://vector-db:8080
+      collections:
+        docs: infa_docs_v1
+        templates: infa_templates_v1
+
+    embedding:
+      provider: ollama              # "ollama" | "cloudflare"
+      model: nomic-embed-text       # for ollama (e.g., "nomic-embed-text", "bge-small-en-v1.5")
+      dim: 768
+      batch_size: 64
+
+      # provider-specific settings (env can override)
+      ollama:
+        host: http://ollama:11434
+
+      cloudflare:
+        account_id: "${CF_ACCOUNT_ID}"
+        model: "@cf/baai/bge-small-en-v1.5"
+        # token will come from env (CF_API_TOKEN)
+    
+    chunking:
+      size: 1200
+      overlap: 200

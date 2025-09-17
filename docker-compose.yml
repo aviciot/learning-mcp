@@ -1,0 +1,18 @@
+services:
+  learning-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8013:8013"
+    volumes:
+      - ./src:/app/src:rw
+      - ./config:/app/config:ro
+      - ./data:/app/data:ro
+    command: >
+      uvicorn learning_mcp.app:app
+      --host 0.0.0.0 --port 8013
+      --reload --reload-dir /app/src
+    restart: unless-stopped
