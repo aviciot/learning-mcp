@@ -1,4 +1,4 @@
-# src/learning_mcp/routes/embed_sample.py
+﻿# src/learning_mcp/routes/embed_sample.py
 """
 Debug endpoint to verify embedding provider connectivity (Ollama/Cloudflare).
 
@@ -16,11 +16,19 @@ from ..embeddings import EmbeddingConfig, Embedder
 
 router = APIRouter()
 
+
 @router.get("/debug/embed", tags=["debug"], summary="Embedding sanity check", description="Returns vector length for a sample text.")
 async def embed_sample(
     text: str = Query("hello world", description="Text to embed"),
     profile: str = Query("informatica-cloud", description="Profile name from YAML"),
 ):
+    """Check the embedding service with a simple GET request.
+
+    Call `GET /debug/embed?text=your+text&profile=name` to confirm that the
+    configured embedding provider is reachable. The response shows the provider,
+    model, and the length of the generated vector so you can verify credentials
+    before triggering a full `/ingest`.
+    """
     profiles = settings.load_profiles()
     prof = next((p for p in profiles.get("profiles", []) if p.get("name") == profile), None)
     if not prof:

@@ -1,6 +1,7 @@
-from typing import Dict, Any, List
+﻿from typing import Dict, Any, List
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
+
 
 class VDB:
     def __init__(self, url: str, collection: str, dim: int):
@@ -15,6 +16,16 @@ class VDB:
                 collection_name=self.collection,
                 vectors_config=VectorParams(size=self.dim, distance=Distance.COSINE),
             )
+
+    def collection_exists(self) -> bool:
+        try:
+            return self.client.collection_exists(collection_name=self.collection)
+        except AttributeError:
+            return self.collection in [c.name for c in self.client.get_collections().collections]
+
+    def count_points(self) -> int:
+        result = self.client.count(collection_name=self.collection, exact=True)
+        return getattr(result, "count", 0)
 
     def upsert(self, vectors: List[List[float]], payloads: List[Dict[str, Any]]):
         points = [PointStruct(id=i, vector=vectors[i], payload=payloads[i]) for i in range(len(vectors))]

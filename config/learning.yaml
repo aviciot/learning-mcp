@@ -3,12 +3,12 @@ version: 1
 profiles:
   - name: informatica-cloud
     documents:
-      - path: /data/IICS/data/IICS_September2022_REST-API_Reference_en.pdf
+      - path: /app/data/IICS/IICS_September2022_REST-API_Reference_en.pdf
         type: pdf
 
     vectordb:
       kind: qdrant
-      url: http://vector-db:8080
+      url: http://vector-db:6333
       collections:
         docs: infa_docs_v1
         templates: infa_templates_v1

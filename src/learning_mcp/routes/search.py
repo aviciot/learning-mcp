@@ -1,4 +1,4 @@
-# src/learning_mcp/routes/search.py
+﻿# src/learning_mcp/routes/search.py
 """
 FastAPI route for semantic search against ingested documents in Qdrant.
 
@@ -19,10 +19,16 @@ from ..vdb import VDB
 
 router = APIRouter()
 
+
 @router.post("/search", tags=["search"])
 async def search(payload: dict = Body(..., example={"profile": "informatica-cloud", "q": "start task", "top_k": 5})):
-    """
-    Perform a semantic search for the given profile.
+    """Search the indexed chunks for a profile.
+
+    Use `POST /search` with a JSON body like `{ "profile": "name", "q": "your question", "top_k": 5 }`.
+    The endpoint embeds the query using the profile's provider, runs a similarity
+    search in Qdrant, and returns the best-matching snippets with their scores
+    and original file paths. Make sure `/ingest` has been run first so the
+    collection contains vectors to search.
     """
     profile_name = payload.get("profile", "informatica-cloud")
     q = payload.get("q", "")

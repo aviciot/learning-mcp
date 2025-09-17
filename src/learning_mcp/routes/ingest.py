@@ -1,4 +1,4 @@
-# src/learning_mcp/routes/ingest.py
+﻿# src/learning_mcp/routes/ingest.py
 """
 FastAPI route for ingesting PDF documents into Qdrant.
 
@@ -20,12 +20,16 @@ from ..vdb import VDB
 
 router = APIRouter()
 
+
 @router.post("/ingest", tags=["ingest"])
 async def ingest(payload: dict = Body(..., example={"profile": "informatica-cloud"})):
-    """
-    Ingest documents for a given profile.
-    - Verifies files exist under /app/data
-    - Embeds and stores in Qdrant
+    """Ingest documents for a profile into Qdrant.
+
+    Send `POST /ingest` with `{ "profile": "name" }` to load that profile's
+    PDFs. The endpoint checks the files exist, slices them into overlapping
+    chunks, generates embeddings, and stores the vectors in the configured
+    Qdrant collection. Use this before hitting `/search` so queries have data
+    to retrieve.
     """
     profile_name = payload.get("profile", "informatica-cloud")
     profiles = settings.load_profiles()

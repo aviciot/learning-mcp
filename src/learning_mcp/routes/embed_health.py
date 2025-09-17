@@ -1,11 +1,19 @@
-import os
+﻿import os
 import httpx
 from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.get("/embed/health")
 async def embed_health():
+    """Check whether the embedding provider is reachable.
+
+    Call `GET /embed/health` to probe the embedding service defined by
+    environment variables (currently supports Ollama). The response confirms
+    connectivity, lists available models, and points out configuration issues
+    so you can fix them before embedding large batches.
+    """
     provider = os.getenv("EMBED_PROVIDER", "ollama")
     model = os.getenv("EMBED_MODEL", None)
 

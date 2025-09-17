@@ -60,6 +60,7 @@ Set the same environment variables as described above before starting the server
 | Method | Path           | Description |
 | ------ | -------------- | ----------- |
 | GET    | `/health`      | Service health check and profile summary. |
+| GET    | `/profiles`    | List configured profiles and Qdrant status. |
 | POST   | `/ingest`      | Ingest documents for a profile (extract -> chunk -> embed -> upsert). |
 | POST   | `/search`      | Semantic search against ingested chunks for a profile. |
 | GET    | `/debug/embed` | Returns embedding vector length for a sample text. |
