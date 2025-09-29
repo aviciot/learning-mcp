@@ -1,88 +1,93 @@
-﻿from typing import Any, Dict
-from fastapi import APIRouter
+﻿# /src/learning_mcp/routes/config_route.py
+"""
+Configuration & profile diagnostics.
+Purpose: Inspect profiles from config/learning.yaml and see resolved embedding/vector DB settings.
 
-from ..config import settings
-from ..vdb import VDB
+User question: "How can I view available profiles and the resolved config for one profile?"
 
-router = APIRouter()
+Example (PowerShell):
+  # List all profiles
+  Invoke-RestMethod -Uri http://localhost:8013/config/profiles -Method Get
 
+  # Inspect one profile
+  Invoke-RestMethod -Uri http://localhost:8013/config/profile/dahua-camera -Method Get
+"""
 
-@router.get("/config", tags=["config"])
-def get_config():
-    """Return a basic view of the parsed configuration.
+from __future__ import annotations
+from typing import Dict, Any
 
-    Call `GET /config` to confirm the service can read `config/learning.yaml`
-    and `.env`. The response lists the profile names plus the runtime
-    environment data, which is handy for troubleshooting container setups.
-    """
-    profiles = settings.load_profiles()
-    names = [p.get("name") for p in profiles.get("profiles", [])]
-    return {
-        "status": "ok",
-        "profiles": names,
-        "profiles_raw_present": bool(profiles),
-        "env": settings.ENV,
-        "port": settings.PORT,
-    }
+from fastapi import APIRouter, HTTPException
+
+from learning_mcp.config import settings
+from learning_mcp.embeddings import EmbeddingConfig
+
+router = APIRouter(prefix="/config", tags=["config"])
 
 
 @router.get(
     "/profiles",
-    tags=["config"],
-    summary="List profiles with vector DB status",
-    description="Returns configured profiles along with the target Qdrant collection and indexed point counts.",
+    summary="List profiles",
+    description="Returns profile names discovered in **config/learning.yaml**.",
 )
 def list_profiles():
-    """Summarise every profile and its Qdrant collection.
+    profs = settings.load_profiles()
+    names = [p.get("name") for p in profs.get("profiles", [])]
+    return {"profiles": names}
 
-    Hit `GET /profiles` to see which documents belong to each profile, the
-    Qdrant collection they target, and how many vectors are currently indexed.
-    It also reports connection problems, making it a quick health check after
-    running `/ingest`.
-    """
-    payload = settings.load_profiles()
-    profiles = payload.get("profiles", [])
-    summaries: list[Dict[str, Any]] = []
 
-    for prof in profiles:
-        name = prof.get("name") or "<unnamed>"
-        vectordb = (prof.get("vectordb") or {})
-        documents = prof.get("documents") or []
-        collections = (vectordb.get("collections") or {})
-        docs_collection = collections.get("docs")
-        vdb_url = vectordb.get("url")
-        dim_raw = (prof.get("embedding") or {}).get("dim", 768)
-        try:
-            dim = int(dim_raw)
-        except (TypeError, ValueError):
-            dim = 768
+@router.get(
+    "/profile/{name}",
+    summary="Inspect a single profile",
+    description=(
+        "Returns the raw profile plus resolved embedding and vector DB configuration. "
+        "Also surfaces autogen hints for planner/critic prompts."
+    ),
+)
+def inspect_profile(name: str):
+    profs = settings.load_profiles()
+    prof = next((p for p in profs.get("profiles", []) if p.get("name") == name), None)
+    if not prof:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Profile '{name}' not found in {settings.PROFILES_PATH}",
+        )
 
-        summary: Dict[str, Any] = {
-            "name": name,
-            "documents": documents,
-            "collection": docs_collection,
-            "vectordb_url": vdb_url,
-            "points_indexed": 0,
-            "status": "unavailable",
-        }
+    # Resolve embedding config (primary/fallback/dim + credentials/hosts)
+    ecfg = EmbeddingConfig.from_profile(prof)
 
-        if not vdb_url or not docs_collection:
-            summary["status"] = "incomplete-config"
-            summaries.append(summary)
-            continue
+    # Vector DB config (optional in YAML)
+    vcfg = prof.get("vectordb", {}) or {}
+    url = vcfg.get("url")
+    col = (vcfg.get("collections") or {}).get("docs", "docs_default")
+    distance = (vcfg.get("distance") or "cosine").lower()
 
-        try:
-            vdb = VDB(url=vdb_url, collection=docs_collection, dim=dim)
-            if not vdb.collection_exists():
-                summary["status"] = "collection-missing"
-            else:
-                count = vdb.count_points()
-                summary["points_indexed"] = count
-                summary["status"] = "ready" if count else "empty"
-        except Exception as exc:  # best-effort diagnostic for UI calls
-            summary["status"] = "error"
-            summary["error"] = str(exc)
+    # Autogen hints (if present in YAML)
+    autogen_hints = prof.get("autogen_hints") or {}
 
-        summaries.append(summary)
+    # Health snapshot (no network call; we don't create VDB or query here)
+    snapshot: Dict[str, Any] = {
+        "embedding": {
+            "primary": ecfg.primary,
+            "fallback": ecfg.fallback,
+            "dim": ecfg.dim,
+            "cloudflare": {
+                "account_id": bool(ecfg.cf_account_id),
+                "model": ecfg.cf_model,
+                "has_api_token": bool(ecfg.cf_api_token),
+            },
+            "ollama": {
+                "host": ecfg.ollama_host,
+                "model": ecfg.ollama_model,
+            },
+        },
+        "vectordb": {
+            "url": url,
+            "collection": col,
+            "distance": distance,
+        },
+        # Surface autogen hints in the resolved section for convenience.
+        "autogen_hints": autogen_hints,
+    }
 
-    return {"status": "ok", "profiles": summaries}
+    # Return both the raw profile (verbatim from YAML) and the resolved snapshot
+    return {"profile": prof, "resolved": snapshot}

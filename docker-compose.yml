@@ -1,22 +1,4 @@
 ﻿services:
-  learning-mcp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    ports:
-      - "8013:8013"
-    volumes:
-      - ./src:/app/src:rw
-      - ./config:/app/config:ro
-      - ./data:/app/data:ro
-    command: >
-      uvicorn learning_mcp.app:app
-      --host 0.0.0.0 --port 8013
-      --reload --reload-dir /app/src
-    restart: unless-stopped
-
   vector-db:
     image: qdrant/qdrant:latest
     ports:
@@ -24,6 +6,61 @@
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6333/readyz"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 6s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+
+  learning-mcp:
+    container_name: learning-mcp
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8013:8013"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8013/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./src:/app/src:rw
+      - ./config:/app/config:ro
+      - ./data:/app/data:ro
+      - ./state:/app/state
+    command: >
+      uvicorn learning_mcp.app:app
+      --host 0.0.0.0 --port 8013
+      --reload --reload-dir /app/src
+      --app-dir /app/src
+    depends_on:
+      vector-db:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
 
 volumes:
   qdrant_data:
+
+networks:
+  app-network:
+    driver: bridge

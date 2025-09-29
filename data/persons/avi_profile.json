@@ -1,0 +1,329 @@
+{
+  "version": "1.0",
+  "generated_at": "2025-09-29T09:01:22Z",
+  "profile": {
+    "full_name": "Avi Cohen",
+    "headline": "AI‑Driven Applications & ETL Expert (12+ yrs) — Agentic RAG • MCP • Data Platforms",
+    "location": "Israel",
+    "mission": "Make complex data systems simple, reliable, and intelligent — so teams can ship faster with confidence.",
+    "philosophy": [
+      "Pragmatic innovation: solve real problems with measurable impact.",
+      "Agentic systems: orchestrate LLMs and tools safely, with observability.",
+      "Automation first: reduce toil; design for repeatability and scale."
+    ],
+    "public_presence": {
+      "website": null,
+      "github": null,
+      "linkedin": null
+    }
+  },
+  "contact": {
+    "email": null,
+    "calendly": null,
+    "visibility": "private"
+  },
+  "skills": {
+    "ai": [
+      "AI‑driven applications",
+      "Agent frameworks (MCP)",
+      "Agentic RAG",
+      "LLM as orchestrator"
+    ],
+    "etl_and_data": [
+      "ETL architecture & lifecycle",
+      "Informatica (PowerCenter, Developer)",
+      "Data modeling & quality",
+      "Automation frameworks"
+    ],
+    "programming_backend": [
+      "Python",
+      "APIs & FastAPI",
+      "Docker & Compose",
+      "Redis",
+      "Selenium",
+      "Jenkins",
+      "AWS (basics)"
+    ],
+    "messaging": [
+      "RabbitMQ",
+      "Kafka",
+      "Celery",
+      "MQTT"
+    ],
+    "databases": [
+      "Oracle",
+      "Postgres",
+      "Couchbase",
+      "Redis",
+      "DuckDB"
+    ],
+    "soft_strengths": [
+      "Technical leadership",
+      "Mentoring & upskilling",
+      "System design",
+      "Innovation under constraints"
+    ],
+    "tags": [
+      "ai",
+      "rag",
+      "mcp",
+      "etl",
+      "python",
+      "orchestrators",
+      "observability",
+      "vector-db"
+    ]
+  },
+  "experience": [
+    {
+      "company": "Shift4",
+      "org": "Data Services R&D",
+      "role": "Technical Lead / Team Lead",
+      "from": "2022-01",
+      "to": "present",
+      "highlights": [
+        "Led agentic platform initiative (Slack‑first), integrating MCP microservices (Oracle MCP, Learning MCP) and Qdrant‑backed RAG.",
+        "Supported and guided multiple data migration projects; defined standards, reviews, and performance hardening.",
+        "Introduced telemetry and routing observability (SQLite), improving triage speed and reliability."
+      ],
+      "tech": [
+        "Python",
+        "FastAPI",
+        "Docker",
+        "Qdrant",
+        "Oracle",
+        "Ollama",
+        "Cloudflare Workers AI",
+        "SQLite",
+        "Redis"
+      ]
+    },
+    {
+      "company": "Amdocs",
+      "org": "Migration R&D",
+      "role": "ETL Development Expert / Tech Lead",
+      "from": "2011-01",
+      "to": "2021-12",
+      "highlights": [
+        "End‑to‑end responsibility for production data pipelines: design, development, deployment, performance & stability.",
+        "Built automation and tooling to accelerate migration workflows; drove cross‑team integration and innovation.",
+        "Recruiting, mentoring, and code reviews; prioritized tasks and improved delivery predictability."
+      ],
+      "tech": [
+        "Informatica",
+        "Python",
+        "Distributed computing",
+        "APIs",
+        "Docker",
+        "Redis"
+      ]
+    }
+  ],
+  "achievements": [
+    {
+      "title": "Amdocs Delivery — Cross‑line Significant Contributor",
+      "impact": "Developed TDM data injection engine and real‑time transaction monitoring at scale; helped establish TDM as a production product (> $3M annual sales).",
+      "links": []
+    },
+    {
+      "title": "Amdocs Innovation Competition (Worldwide) — Top 5",
+      "impact": "Smart Synthetic Data tool — ML‑powered synthetic data generation with advanced controls and fidelity.",
+      "links": []
+    }
+  ],
+  "education": [
+    {
+      "degree": "B.Sc. Industrial Management",
+      "institution": "Braude College",
+      "from": "2003",
+      "to": "2006"
+    },
+    {
+      "note": "Many online courses (Udemy etc.) across AI, data engineering, and application development."
+    }
+  ],
+  "interests": [
+    "Smart home (IoT) platforms and tools",
+    "Creative problem‑solving with automation",
+    "Mentoring and building engineering culture"
+  ],
+  "projects": [
+    {
+      "name": "DS_Agent",
+      "summary": "Slack‑first Text‑to‑SQL agent with DB‑aware routing, telemetry, and MCP integration; uses vector search for context and guardrails.",
+      "status": "active",
+      "topics": [
+        "text2sql",
+        "sqlite",
+        "oracle",
+        "redis",
+        "mcp",
+        "agentic"
+      ],
+      "repo_url": null
+    },
+    {
+      "name": "Learning MCP",
+      "summary": "FastAPI + Qdrant microservice that ingests large PDFs (e.g., API docs) and serves semantic search + API planning hints for downstream agents.",
+      "status": "active",
+      "topics": [
+        "mcp",
+        "qdrant",
+        "ollama",
+        "cloudflare-ai",
+        "rag"
+      ],
+      "repo_url": null
+    },
+    {
+      "name": "Informatica Clean Data Tool",
+      "summary": "Retention‑aware partition cleanup orchestrated by Informatica PowerCenter and Python engine; rules and logging with dry‑run & notifications.",
+      "status": "active",
+      "topics": [
+        "informatica",
+        "oracle",
+        "automation",
+        "observability"
+      ],
+      "repo_url": null
+    },
+    {
+      "name": "Matrix Portfolio Webapp",
+      "summary": "Next.js + FastAPI SPA with Matrix‑style UI, JWT auth, Slack‑style chat, and admin telemetry; showcases AI projects and demos.",
+      "status": "active",
+      "topics": [
+        "nextjs",
+        "fastapi",
+        "jwt",
+        "qdrant",
+        "rag",
+        "ui"
+      ],
+      "repo_url": null
+    },
+    {
+      "name": "Home Assistant — Advanced IoT Setup",
+      "summary": "Production‑like Home Assistant deployment with Docker; advanced automations for security and daily routines; Frigate‑based camera analytics (face/person/object detection) and event‑driven actions.",
+      "status": "active",
+      "topics": [
+        "home-assistant",
+        "frigate",
+        "mqtt",
+        "security",
+        "automation",
+        "docker",
+        "ai-vision"
+      ],
+      "details": {
+        "stack": {
+          "orchestrator": "Docker Compose",
+          "home_assistant": "Core in Docker",
+          "mqtt": "Mosquitto",
+          "nvr": "Frigate (NVR + object detection)",
+          "storage": "Local NAS / shared volumes"
+        },
+        "automations_examples": [
+          "Face/person detection → trigger lights, send mobile notifications with snapshot & privacy redaction.",
+          "Geo‑fencing (arrival/departure) → arm/disarm security scenes, adjust climate and lighting.",
+          "Nighttime perimeter mode → enhance camera sensitivity; silence non‑critical alerts; record to separate retention bucket.",
+          "Package detection at door → TTS announcement + short‑term lock camera PTZ preset."
+        ],
+        "security_notes": [
+          "Network segmentation for IoT VLAN; limited ingress; HA behind reverse proxy.",
+          "Secret management via .env / Vault (planned); audit logs for automations."
+        ]
+      },
+      "repo_url": null
+    }
+  ],
+  "faq": [
+    {
+      "q": "What is Avi’s expertise in AI?",
+      "a": "Designing AI‑driven apps with agentic patterns (MCP) and RAG. Building microservices that let LLMs orchestrate tools safely, with telemetry and guardrails."
+    },
+    {
+      "q": "What are Avi’s core strengths?",
+      "a": "ETL architecture, hands‑on automation, technical leadership, and turning ambiguous goals into robust systems."
+    },
+    {
+      "q": "What is Avi currently exploring?",
+      "a": "LangGraph & AutoGen for multi‑step planning, LoRA for local models, and better observability for agentic workflows."
+    }
+  ],
+  "media": {
+    "notes": "Vector DB should store references, not binaries. Store videos/images in object storage or Git repo; index captions/thumbnails and link here.",
+    "items": [
+      {
+        "type": "image",
+        "title": "Home Assistant Dashboard — Security Mode",
+        "url": null,
+        "thumbnail": null,
+        "captions": [
+          "Dashboard view with security scene toggles and camera tiles."
+        ],
+        "tags": [
+          "home-assistant",
+          "ui",
+          "security"
+        ],
+        "visibility": "public"
+      },
+      {
+        "type": "video",
+        "title": "Frigate: Face/Person Detection Demo",
+        "url": null,
+        "thumbnail": null,
+        "captions": [
+          "Short clip showing detection event, snapshot, and automation trigger."
+        ],
+        "tags": [
+          "frigate",
+          "cv",
+          "automation"
+        ],
+        "visibility": "public"
+      }
+    ]
+  },
+  "seed_queries": [
+    "What is Avi’s background?",
+    "List Avi’s key skills.",
+    "Tell me about Avi’s recent projects.",
+    "How does Avi use Agentic RAG?",
+    "What’s Avi’s IoT/Home Assistant setup?"
+  ],
+  "metadata": {
+    "source": "avi_profile.json",
+    "visibility_default": "public",
+    "ingest_sections": [
+      "profile",
+      "contact",
+      "skills",
+      "experience",
+      "achievements",
+      "education",
+      "interests",
+      "projects",
+      "faq",
+      "media",
+      "seed_queries"
+    ],
+    "chunking": {
+      "long_text_threshold_tokens": 900,
+      "overlap_tokens": 100
+    },
+    "embedding": {
+      "primary": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "dim": 768
+      },
+      "fallback": {
+        "provider": "cloudflare",
+        "model": "@cf/baai/bge-small-en-v1.5",
+        "dim": 384
+      },
+      "collection_suffix_by_dim": true
+    }
+  }
+}

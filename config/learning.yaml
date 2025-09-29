@@ -1,33 +1,121 @@
 version: 1
 
 profiles:
-  - name: informatica-cloud
+
+  - name: avi-cohen
     documents:
-      - path: /app/data/IICS/IICS_September2022_REST-API_Reference_en.pdf
-        type: pdf
+      - type: json
+        path: /app/data/personal/avi_profile.json
+
+    chunking:
+      size: 600
+      overlap: 200
 
     vectordb:
-      kind: qdrant
       url: http://vector-db:6333
-      collections:
-        docs: infa_docs_v1
-        templates: infa_templates_v1
+      distance: cosine
+      collection: avi-cohen
 
     embedding:
-      provider: ollama              # "ollama" | "cloudflare"
-      model: nomic-embed-text       # for ollama (e.g., "nomic-embed-text", "bge-small-en-v1.5")
-      dim: 768
-      batch_size: 64
+      dim: 384
+      backend: { primary: cloudflare, fallback: cloudflare }
+      ollama: { host: http://host.docker.internal:11434, model: nomic-embed-text }
+      cloudflare: { account_id: "", api_token: "", model: "@cf/baai/bge-small-en-v1.5" }
 
-      # provider-specific settings (env can override)
-      ollama:
-        host: http://ollama:11434
+    autogen_hints:
+      labels:
+        domain: ["about_me"]
+        intents: ["skills", "experience", "projects", "iot"]
+      synonyms:
+        person: ["Avi", "Avi Cohen"]
+        iot: ["home assistant", "HA", "Frigate"]
+      answer_style:
+        person: "third"   # or "first"
+        tone: "concise"
+      visibility:
+        redact_fields: ["email", "calendly"]
 
-      cloudflare:
-        account_id: "${CF_ACCOUNT_ID}"
-        model: "@cf/baai/bge-small-en-v1.5"
-        # token will come from env (CF_API_TOKEN)
-    
+
+
+
+      
+  # --- Profile 1: Informatica (Cloudflare as primary) ---
+  - name: informatica-cloud
+    documents:
+      - type: pdf
+        path: /app/data/iics/IICS_September2022_REST-API_Reference_en.pdf
+
+
     chunking:
-      size: 1200
+      size: 600
       overlap: 200
+
+    vectordb:
+      url: http://vector-db:6333
+      distance: cosine
+      collection: informatica-cloud
+
+    embedding:
+      dim: 384
+      backend:
+        primary: cloudflare
+        fallback: cloudflare
+      ollama:
+        host: http://host.docker.internal:11434
+        model: nomic-embed-text   # (768-dim if switched to primary)
+      cloudflare:
+        account_id: ""
+        api_token: ""
+        model: "@cf/baai/bge-small-en-v1.5"   # 384-dim
+
+  # --- Profile 2: Dahua camera ---
+  - name: dahua-camera
+    documents:
+      - type: pdf
+        path: /app/data/dahua/DAHUA_IPC_HTTP_API_V1.pdf
+
+    chunking:
+      size: 600
+      overlap: 200
+    autogen_hints:
+      labels:
+        api_plan: "API PLAN critic for Dahua IPC"
+        api_call_plan: "API CALL PLAN for Dahua configManager.cgi"
+
+      endpoint:
+        allow_pattern: "^/cgi-bin/configManager\\.cgi$"
+        forbid_patterns: ["\\.pdf$", "^/app/data/"]
+
+      templates:
+        read:
+          method: "GET"
+          params: { action: "getConfig", name: "<Feature>" }
+        write:
+          method: "GET"
+          params: { action: "setConfig", "<Param>": "<Value>" }
+          require_example_in_evidence: true
+
+      endpoint_examples:
+        - "/cgi-bin/configManager.cgi?action=getConfig&name=AudioEncode"
+        - "/cgi-bin/configManager.cgi?action=setConfig&AudioEnable=true"
+        - "/cgi-bin/configManager.cgi?action=setConfig&AudioEnable=false"
+
+
+
+    vectordb:
+      url: http://vector-db:6333
+      distance: cosine
+      collection: dahua-camera
+
+    embedding:
+      dim: 384
+      backend:
+        primary: cloudflare
+        fallback: cloudflare
+      ollama:
+        host: http://host.docker.internal:11434
+        model: nomic-embed-text
+      cloudflare:
+        account_id: ""
+        api_token: ""
+        model: "@cf/baai/bge-small-en-v1.5"
