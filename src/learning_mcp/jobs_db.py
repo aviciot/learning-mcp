@@ -159,11 +159,22 @@ class JobsDB:
             return cur.rowcount
 
     # ---------- Queries ----------
-    def list_jobs(self, limit: int = 20):
+    def list_jobs(self, profile: Optional[str] = None, status: Optional[str] = None, limit: int = 20):
+        query = "SELECT * FROM jobs WHERE 1=1"
+        params = []
+        
+        if profile:
+            query += " AND profile=?"
+            params.append(profile)
+        if status:
+            query += " AND status=?"
+            params.append(status)
+        
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        
         with self._connect() as conn:
-            cur = conn.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
-            )
+            cur = conn.execute(query, tuple(params))
             cols = [c[0] for c in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 

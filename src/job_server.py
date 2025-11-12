@@ -130,9 +130,9 @@ async def _worker_run_ingest(job_id: str, prof: dict, truncate: bool):
         # Optionally truncate
         if truncate:
             log.info(f"Job {job_id}: Truncating collection '{collection}'")
-            await vdb.truncate()
+            vdb.truncate()
         else:
-            await vdb.ensure_collection()
+            vdb.ensure_collection()
         
         # Load chunks
         chunks, stats = collect_chunks(
@@ -166,31 +166,29 @@ async def _worker_run_ingest(job_id: str, prof: dict, truncate: bool):
         db.set_phase(job_id, JobPhase.UPSERT)
         log.info(f"Job {job_id}: Upserting {len(vectors)} vectors to Qdrant...")
         
-        points = []
+        ids = []
+        payloads = []
         for i, (chunk, vec) in enumerate(zip(chunks, vectors)):
             point_id = str(uuid.uuid5(
                 uuid.NAMESPACE_DNS,
                 f"{chunk['metadata'].get('doc_id')}|{chunk['metadata'].get('doc_path')}|{i}"
             ))
-            points.append({
-                "id": point_id,
-                "vector": vec,
-                "payload": {
-                    "text": chunk["text"],
-                    "doc_id": chunk["metadata"].get("doc_id"),
-                    "doc_path": chunk["metadata"].get("doc_path"),
-                    "chunk_idx": i,
-                    "profile": profile_name,
-                    "ingested_at": datetime.utcnow().isoformat()
-                }
+            ids.append(point_id)
+            payloads.append({
+                "text": chunk["text"],
+                "doc_id": chunk["metadata"].get("doc_id"),
+                "doc_path": chunk["metadata"].get("doc_path"),
+                "chunk_idx": i,
+                "profile": profile_name,
+                "ingested_at": datetime.utcnow().isoformat()
             })
         
-        await vdb.upsert(points)
-        db.update_progress(job_id, chunks_done=len(points))
+        vdb.upsert(vectors, payloads, ids)
+        db.update_progress(job_id, chunks_done=len(ids))
         
         # Complete
         db.finish_job(job_id, status=JobStatus.COMPLETED)
-        log.info(f"Job {job_id}: Completed successfully ({len(points)} chunks)")
+        log.info(f"Job {job_id}: Completed successfully ({len(ids)} chunks)")
         
     except asyncio.CancelledError:
         log.warning(f"Job {job_id}: Cancelled by user")

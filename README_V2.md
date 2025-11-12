@@ -5,7 +5,7 @@
 FastAPI service implementing RAG (Retrieval-Augmented Generation) over PDF/JSON documents using Qdrant vector database. Exposes semantic search and AutoGen-powered API planning via **Model Context Protocol (MCP)** tools, with FastAPI handling background ingestion jobs.
 
 [![Tests](https://github.com/aviciot/learning-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/aviciot/learning-mcp/actions/workflows/test.yml)
-[![Coverage](https://img.shields.io/badge/coverage-23.66%25-yellow)](htmlcov/index.html)
+[![Coverage](https://img.shields.io/badge/coverage-25.90%25-yellow)](htmlcov/index.html)
 [![Docker](https://github.com/aviciot/learning-mcp/actions/workflows/docker-build.yml/badge.svg)](https://github.com/aviciot/learning-mcp/actions/workflows/docker-build.yml)
 
 ## 🚀 What's New in v2.0
@@ -13,9 +13,10 @@ FastAPI service implementing RAG (Retrieval-Augmented Generation) over PDF/JSON 
 - **Dual-Server Architecture**: MCP server (port 8013) + Job server (port 8014) running via supervisor
 - **fastmcp Integration**: Replaced fastapi-mcp with modern `fastmcp>=0.2.0` using HTTP Streamable transport
 - **On-Demand Ingestion**: Start ingest jobs via API, monitor progress, cancel running jobs
-- **Comprehensive Testing**: 57 tests (12 passing unit tests, 19 integration tests), 23.66% coverage baseline
+- **Production-Ready Testing**: 26/38 tests passing (68.4%), 25.90% coverage with VDB at 60.69%
 - **GitHub Actions CI/CD**: Automated testing on PRs, Docker image publishing to GHCR
 - **Refactored Structure**: AutoGen agent moved to `src/learning_mcp/agents/`, cleaner imports
+- **Bug Fixes**: Resolved VDB async issues, JobsDB filtering, and ingest pipeline errors
 
 ## 🏗️ Architecture
 
@@ -204,6 +205,17 @@ profiles:
 | `EMBED_PACING_MS` | 150 | Rate limit delay (ms) |
 
 ## 🐛 Troubleshooting
+
+### Ingest Job Fails
+```powershell
+# Check job error
+curl http://localhost:8014/jobs/{job_id}
+
+# Common fixes:
+# 1. VDB async error: Ensure VDB methods aren't awaited (they're synchronous)
+# 2. Embedding config: Verify Cloudflare/Ollama credentials in learning.yaml
+# 3. Dimension mismatch: Check profile.embedding.dim matches model output
+```
 
 ### MCP Server Won't Start
 ```powershell

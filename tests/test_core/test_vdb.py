@@ -30,56 +30,53 @@ def test_vdb_init(vdb_config, mock_qdrant_client):
     """Test VDB initialization."""
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
     
-    assert vdb.collection_name == "test-collection"
+    assert vdb.collection == "test-collection"
     assert vdb.dim == 768
+    assert vdb.url == "http://localhost:6333"
     mock_qdrant_client.assert_called_once_with(url="http://localhost:6333")
 
 
 def test_ensure_collection_creates_if_missing(vdb_config, mock_qdrant_client):
     """Test ensure_collection creates collection if it doesn't exist."""
     mock_client = mock_qdrant_client.return_value
-    mock_client.collection_exists.return_value = False
+    mock_client.get_collection.side_effect = Exception("Collection not found")
     
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
     vdb.ensure_collection()
     
-    mock_client.collection_exists.assert_called_once_with("test-collection")
-    mock_client.create_collection.assert_called_once()
+    mock_client.get_collection.assert_called_once_with("test-collection")
+    mock_client.recreate_collection.assert_called_once()
 
 
 def test_ensure_collection_skips_if_exists(vdb_config, mock_qdrant_client):
     """Test ensure_collection skips creation if collection exists."""
     mock_client = mock_qdrant_client.return_value
-    mock_client.collection_exists.return_value = True
+    mock_client.get_collection.return_value = Mock(name="collection_info")
     
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
     vdb.ensure_collection()
     
-    mock_client.collection_exists.assert_called_once_with("test-collection")
-    mock_client.create_collection.assert_not_called()
+    mock_client.get_collection.assert_called_once_with("test-collection")
+    mock_client.recreate_collection.assert_not_called()
 
 
 def test_upsert_points(vdb_config, mock_qdrant_client):
     """Test upserting points to Qdrant."""
     mock_client = mock_qdrant_client.return_value
+    mock_client.get_collection.return_value = Mock(name="collection_info")
     
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
     
-    points = [
-        {
-            "id": str(uuid5(NAMESPACE_DNS, "doc1|path1|0")),
-            "vector": [0.1] * 768,
-            "payload": {"text": "test 1", "doc_id": "doc1"}
-        },
-        {
-            "id": str(uuid5(NAMESPACE_DNS, "doc1|path1|1")),
-            "vector": [0.2] * 768,
-            "payload": {"text": "test 2", "doc_id": "doc1"}
-        }
+    vectors = [[0.1] * 768, [0.2] * 768]
+    payloads = [
+        {"text": "test 1", "doc_id": "doc1"},
+        {"text": "test 2", "doc_id": "doc1"}
     ]
+    ids = [str(uuid5(NAMESPACE_DNS, "doc1|path1|0")), str(uuid5(NAMESPACE_DNS, "doc1|path1|1"))]
     
-    vdb.upsert(points)
+    result_ids = vdb.upsert(vectors, payloads, ids)
     
+    assert len(result_ids) == 2
     mock_client.upsert.assert_called_once()
     call_args = mock_client.upsert.call_args
     assert call_args[1]["collection_name"] == "test-collection"
@@ -89,6 +86,7 @@ def test_upsert_points(vdb_config, mock_qdrant_client):
 def test_search_basic(vdb_config, mock_qdrant_client):
     """Test basic search functionality."""
     mock_client = mock_qdrant_client.return_value
+    mock_client.get_collection.return_value = Mock(name="collection_info")
     
     # Mock search results
     mock_result = [
@@ -103,8 +101,8 @@ def test_search_basic(vdb_config, mock_qdrant_client):
     results = vdb.search(query_vector, top_k=5)
     
     assert len(results) == 2
-    assert results[0]["score"] == 0.9
-    assert results[0]["payload"]["text"] == "result 1"
+    assert results[0].score == 0.9
+    assert results[0].payload["text"] == "result 1"
     
     mock_client.search.assert_called_once()
 
@@ -112,6 +110,7 @@ def test_search_basic(vdb_config, mock_qdrant_client):
 def test_search_with_filter(vdb_config, mock_qdrant_client):
     """Test search with payload filter."""
     mock_client = mock_qdrant_client.return_value
+    mock_client.get_collection.return_value = Mock(name="collection_info")
     mock_client.search.return_value = []
     
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
@@ -119,7 +118,7 @@ def test_search_with_filter(vdb_config, mock_qdrant_client):
     query_vector = [0.5] * 768
     filter_dict = {"doc_id": "doc1"}
     
-    vdb.search(query_vector, top_k=5, filter=filter_dict)
+    vdb.search(query_vector, top_k=5, filter_by=filter_dict)
     
     call_args = mock_client.search.call_args[1]
     assert call_args["query_filter"] is not None
@@ -150,9 +149,9 @@ def test_truncate_collection(vdb_config, mock_qdrant_client):
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
     vdb.truncate()
     
-    # Should delete then create
+    # Should delete then recreate
     mock_client.delete_collection.assert_called_once_with("test-collection")
-    mock_client.create_collection.assert_called_once()
+    mock_client.recreate_collection.assert_called_once()
 
 
 def test_upsert_deterministic_ids():
@@ -188,28 +187,26 @@ def test_upsert_batch_size():
     """Test that upsert can handle large batches."""
     with patch('learning_mcp.vdb.QdrantClient') as mock_qdrant:
         mock_client = mock_qdrant.return_value
+        mock_client.get_collection.return_value = Mock(name="collection_info")
         
         vdb = VDB("http://localhost:6333", "test", 768)
         
-        # Create 1000 points
-        points = [
-            {
-                "id": str(uuid5(NAMESPACE_DNS, f"doc1|path|{i}")),
-                "vector": [0.1] * 768,
-                "payload": {"text": f"chunk {i}"}
-            }
-            for i in range(1000)
-        ]
+        # Create 1000 vectors
+        vectors = [[0.1] * 768 for _ in range(1000)]
+        payloads = [{"text": f"chunk {i}"} for i in range(1000)]
+        ids = [str(uuid5(NAMESPACE_DNS, f"doc1|path|{i}")) for i in range(1000)]
         
-        vdb.upsert(points)
+        result_ids = vdb.upsert(vectors, payloads, ids)
         
-        # Should succeed without error
-        mock_client.upsert.assert_called_once()
+        assert len(result_ids) == 1000
+        # Should be called multiple times due to batching (batch size = 256)
+        assert mock_client.upsert.call_count >= 4
 
 
 def test_search_with_score_threshold(vdb_config, mock_qdrant_client):
-    """Test search with minimum score threshold."""
+    """Test search returns results that can be filtered by score."""
     mock_client = mock_qdrant_client.return_value
+    mock_client.get_collection.return_value = Mock(name="collection_info")
     
     # Mock results with varying scores
     mock_result = [
@@ -222,12 +219,12 @@ def test_search_with_score_threshold(vdb_config, mock_qdrant_client):
     vdb = VDB(vdb_config["url"], vdb_config["collection"], vdb_config["dim"])
     
     query_vector = [0.5] * 768
-    results = vdb.search(query_vector, top_k=10, score_threshold=0.6)
+    results = vdb.search(query_vector, top_k=10)
     
-    # Check if score_threshold was passed to Qdrant
-    call_args = mock_client.search.call_args[1]
-    if "score_threshold" in call_args:
-        assert call_args["score_threshold"] == 0.6
+    # Application can filter results by score threshold
+    high_score_results = [r for r in results if r.score >= 0.6]
+    assert len(high_score_results) == 1
+    assert len(results) == 3
 
 
 def test_vdb_connection_error_handling(vdb_config):
