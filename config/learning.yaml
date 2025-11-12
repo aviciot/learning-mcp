@@ -5,7 +5,7 @@ profiles:
   - name: avi-cohen
     documents:
       - type: json
-        path: /app/data/personal/avi_profile.json
+        path: /app/data/persons/avi_profile.json
 
     chunking:
       size: 600
@@ -34,9 +34,6 @@ profiles:
         tone: "concise"
       visibility:
         redact_fields: ["email", "calendly"]
-
-
-
 
       
   # --- Profile 1: Informatica (Cloudflare as primary) ---

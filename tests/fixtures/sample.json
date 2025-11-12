@@ -1,0 +1,27 @@
+{
+  "name": "Avi Cohen",
+  "title": "Senior Software Engineer",
+  "skills": [
+    "Python",
+    "FastAPI",
+    "Docker",
+    "Vector Databases",
+    "Machine Learning"
+  ],
+  "experience": {
+    "years": 10,
+    "domains": ["fintech", "AI/ML", "API development"],
+    "current_role": "Building RAG systems with MCP"
+  },
+  "projects": [
+    {
+      "name": "Learning MCP",
+      "description": "FastAPI service implementing RAG over PDF/JSON docs",
+      "tech_stack": ["FastAPI", "Qdrant", "Ollama", "AutoGen"]
+    }
+  ],
+  "contact": {
+    "email": "avi@example.com",
+    "location": "Remote"
+  }
+}

@@ -28,24 +28,27 @@
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_PORT=8013
+      - JOB_PORT=8014
+      - VECTOR_DB_URL=http://vector-db:6333
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - USE_AUTOGEN=0
     ports:
-      - "8013:8013"
+      - "8013:8013"  # MCP server (SSE)
+      - "8014:8014"  # Job server (HTTP REST)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8013/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8014/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
     volumes:
-      - ./src:/app/src:rw
+      - ./src:/app/src:ro
       - ./config:/app/config:ro
       - ./data:/app/data:ro
       - ./state:/app/state
-    command: >
-      uvicorn learning_mcp.app:app
-      --host 0.0.0.0 --port 8013
-      --reload --reload-dir /app/src
-      --app-dir /app/src
     depends_on:
       vector-db:
         condition: service_started

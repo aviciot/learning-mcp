@@ -21,6 +21,8 @@ from learning_mcp.routes import jobs as jobs_routes
 from learning_mcp.routes.api_exec import router as api_exec_router
 from learning_mcp.routes.search_api import router as search_api_router
 from learning_mcp.routes.api_plan import router as api_plan_router
+from learning_mcp.routes.echo import router as echo_route
+
 
 from contextlib import asynccontextmanager
 import httpx, os, asyncio
@@ -145,6 +147,8 @@ app.include_router(config_router, prefix="", tags=["config"])
 app.include_router(embed_sample_router, prefix="")
 app.include_router(jobs_routes.router, prefix="", tags=["monitoring"])
 app.include_router(api_agent_router, prefix="/agent", tags=["agent"])  # ✅ fixed
+app.include_router(echo_route, prefix="/echo", tags=["api"])
+
 logger.info("Routers registered: health, ingest, search, search_api, config, embed_sample, jobs, agent")
 
 # ---------- MCP Integration ----------
@@ -152,7 +156,7 @@ try:
     from fastapi_mcp import FastApiMCP
 
     mcp = FastApiMCP(app,
-                     include_operations=["api_context", "api_request", "api_plan"]
+                     include_operations=["echo", "api_context", "api_request", "api_plan"]
                      )
     mcp.mount_http(mount_path="/mcp")  # 👈 HTTP transport at /mcp (recommended)
     logger.info("MCP HTTP server mounted at /mcp")

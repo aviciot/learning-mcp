@@ -7,36 +7,31 @@ Purpose:
 - POST /ingest/cancel_all  : cancel all running/queued ingests (kills Ollama/Cloudflare embedding via task cancel)
 - Background worker        : extracts, chunks, embeds, upserts; updates progress in SQLite
 
-User question (example):
-Q: "How do I start an ingest and, if needed, cancel all running ingests?"
-A:
-  # Enqueue (Swagger example body is prefilled)
-  Invoke-RestMethod -Uri http://localhost:8013/ingest/jobs -Method Post -ContentType 'application/json' `
-    -Body '{"profile":"dahua-camera","truncate":true}'
-
-  # Cancel all
-  Invoke-RestMethod -Uri http://localhost:8013/ingest/cancel_all -Method Post
+Notes:
+- Type-agnostic ingest via loader registry (PDF/JSON and future types).
+- Deterministic IDs for upserts (UUIDv5) to keep re-ingest idempotent and Qdrant-compliant.
 """
+
 from __future__ import annotations
 from typing import Optional, List, Dict, Any
 import os, time, logging, asyncio
+import hashlib
+import uuid  # <-- NEW
 
-import uuid
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
 from learning_mcp.config import settings
 from learning_mcp.embeddings import EmbeddingConfig, Embedder, EmbeddingError
 from learning_mcp.vdb import VDB
-from learning_mcp.pdf_loader import load_pdf
-from learning_mcp.page_ranges import compute_pages
 from learning_mcp.jobs_db import JobsDB, JobStatus, JobPhase
 
-# prefer pypdf if available (faster), fallback to PyPDF2
-try:
-    from pypdf import PdfReader  # type: ignore
-except Exception:
-    from PyPDF2 import PdfReader  # type: ignore
+# type-agnostic document loaders
+from learning_mcp.document_loaders import (
+    collect_chunks,
+    known_document_count,
+    estimate_pages_total,
+)
 
 router = APIRouter()
 log = logging.getLogger("learning_mcp.ingest")
@@ -66,16 +61,6 @@ class EnqueueIngestResponse(BaseModel):
     canceled_previous: int = Field(..., example=1)
     collection: str = Field(..., example="docs_dahua")
 
-# ---------- Helpers ----------
-def _profile_docs(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return [d for d in (profile.get("documents") or []) if (d.get("type") or "").lower() == "pdf"]
-
-def _count_selected_pages(pdf_path: str, include_spec: Optional[str], exclude_spec: Optional[str]) -> int:
-    reader = PdfReader(pdf_path)
-    total = len(reader.pages)
-    pages = compute_pages(include_spec=include_spec, exclude_spec=exclude_spec, total_pages=total)
-    return len(pages)
-
 # ---------- Worker ----------
 async def _worker_run_ingest(job_id: str, profile: Dict[str, Any], truncate: bool) -> None:
     db = JobsDB()
@@ -90,6 +75,9 @@ async def _worker_run_ingest(job_id: str, profile: Dict[str, Any], truncate: boo
     # plan logging
     backend_primary = (profile.get("embedding", {}) or {}).get("backend", {}).get("primary", "ollama")
     cf_model = (profile.get("embedding", {}) or {}).get("cloudflare", {}).get("model")
+    cparams = profile.get("chunking", {}) or {}
+    chunk_size = int(cparams.get("size", 1200))
+    chunk_overlap = int(cparams.get("overlap", 200))
     log.info(
         "job.plan id=%s backend_primary=%s model=%s cf_model=%s dim=%s chunk_size=%s overlap=%s concurrency=%s",
         job_id,
@@ -97,8 +85,8 @@ async def _worker_run_ingest(job_id: str, profile: Dict[str, Any], truncate: boo
         ecfg.ollama_model,
         cf_model or "",
         ecfg.dim,
-        (profile.get("chunking") or {}).get("size", 1200),
-        (profile.get("chunking") or {}).get("overlap", 200),
+        chunk_size,
+        chunk_overlap,
         os.getenv("EMBED_CONCURRENCY", ""),
     )
 
@@ -109,113 +97,95 @@ async def _worker_run_ingest(job_id: str, profile: Dict[str, Any], truncate: boo
     else:
         vdb.ensure_collection()
 
-    cparams = profile.get("chunking", {}) or {}
-    chunk_size = int(cparams.get("size", 1200))
-    chunk_overlap = int(cparams.get("overlap", 200))
-
     db.mark_running(job_id)
     db.set_phase(job_id, JobPhase.PREFLIGHT)
 
-    pdfs = _profile_docs(profile)
-    files_total = len(pdfs)
-    pages_total = sum(
-        _count_selected_pages(
-            (d.get("path") or "").strip(),
-            include_spec=(d.get("include_pages") or profile.get("include_pages")),
-            exclude_spec=(d.get("exclude_pages") or profile.get("exclude_pages")),
-        )
-        for d in pdfs
-        if d.get("path") and os.path.exists(d.get("path"))
-    )
+    # Collect chunks (type-agnostic) and preflight stats
+    chunks, stats = collect_chunks(profile, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    files_total = int(stats.get("files_total", 0))
+    pages_total = int(stats.get("pages_total", 0))
     db.update_progress(job_id, files_total=files_total, pages_total=pages_total, files_done=0, pages_done=0, chunks_done=0)
     log.info("job.preflight id=%s files=%s pages=%s", job_id, files_total, pages_total)
 
-    pages_done = files_done = chunks_done = 0
+    # Nothing to ingest
+    if files_total == 0 or not chunks:
+        db.finish_job(job_id, status=JobStatus.COMPLETED)
+        log.warning("job.done id=%s status=completed (no chunks)", job_id)
+        await emb.close()
+        _pop_task(job_id)
+        return
 
     try:
-        for d in pdfs:
-            # cooperative cancel point
-            await asyncio.sleep(0)
-            path = (d.get("path") or "").strip()
-            if not path or not os.path.exists(path):
-                log.warning("job.skip id=%s missing_file=%s", job_id, path)
-                continue
+        # ---------- EMBED ----------
+        db.set_phase(job_id, JobPhase.EMBED)
+        doc_id = str(profile.get("name") or "profile")
+        texts = [c.get("text", "") for c in chunks]
+        log.info("job.embed.start id=%s chunks=%s", job_id, len(texts))
 
-            db.set_phase(job_id, JobPhase.EXTRACT)
-            reader = PdfReader(path)
-            sel_pages = compute_pages(
-                include_spec=(d.get("include_pages") or profile.get("include_pages")),
-                exclude_spec=(d.get("exclude_pages") or profile.get("exclude_pages")),
-                total_pages=len(reader.pages),
-            )
-            current_file_pages = len(sel_pages)
-            db.update_progress(job_id, current_file=path, current_page=0, current_file_pages=current_file_pages)
-            log.info("job.extract id=%s file=%s pages_selected=%s", job_id, os.path.basename(path), current_file_pages)
+        t0 = time.perf_counter()
+        try:
+            # Embed IDs for cache alignment (stable but not necessarily the final point IDs)
+            embed_ids = [f"{doc_id}:{i}" for i in range(len(texts))]
+            vecs = await emb.embed(texts, ids=embed_ids)
+        except asyncio.CancelledError:
+            log.warning("job.cancelled id=%s phase=embed", job_id)
+            db.finish_job(job_id, status=JobStatus.CANCELED, error="cancelled by user")
+            raise
+        except EmbeddingError as e:
+            db.finish_job(job_id, status=JobStatus.FAILED, error=f"Embedding failed: {e}")
+            log.error("job.embed.fail id=%s err=%s", job_id, e)
+            return
+        t1 = time.perf_counter()
 
-            chunks = load_pdf(
-                path,
-                include_pages=(d.get("include_pages") or profile.get("include_pages")),
-                exclude_pages=(d.get("exclude_pages") or profile.get("exclude_pages")),
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-            )
+        # ---------- UPSERT ----------
+        db.set_phase(job_id, JobPhase.UPSERT)
 
-            pages_done += current_file_pages
-            db.update_progress(job_id, pages_done=pages_done, current_page=current_file_pages)
+        payloads: List[Dict[str, Any]] = []
+        ids: List[str] = []  # <-- valid UUIDs for Qdrant
 
-            if not chunks:
-                files_done += 1
-                db.update_progress(job_id, files_done=files_done)
-                log.info("job.nochunks id=%s file=%s", job_id, os.path.basename(path))
-                continue
-            doc_id = profile.get("name") 
-            
-            # EMBED
-            db.set_phase(job_id, JobPhase.EMBED)
-            log.info("job.embed.start id=%s file=%s chunks=%s", job_id, os.path.basename(path), len(chunks))
-            t0 = time.perf_counter()
-            try:
-                doc_id = profile.get("name")   # canonical document id, e.g., "dahua-camera"
-                ids = [f"{doc_id}:{os.path.basename(path)}:{i}" for i in range(len(chunks))]
-                vecs = await emb.embed(chunks, ids=ids)  # optional cache hook supported
-            except asyncio.CancelledError:
-                log.warning("job.cancelled id=%s phase=embed", job_id)
-                db.finish_job(job_id, status=JobStatus.CANCELED, error="cancelled by user")
-                raise
-            except EmbeddingError as e:
-                db.finish_job(job_id, status=JobStatus.FAILED, error=f"Embedding failed: {e}")
-                log.error("job.embed.fail id=%s err=%s", job_id, e)
-                return
-            t1 = time.perf_counter()
+        for i, ch in enumerate(chunks):
+            meta = ch.get("metadata") or {}
 
-            # UPSERT
-            db.set_phase(job_id, JobPhase.UPSERT)
-            ids = [str(uuid.uuid4()) for _ in range(len(chunks))]  # ✅ valid point IDs for Qdrant
+            # Deterministic seed for UUIDv5
+            stable = f"{doc_id}|{meta.get('path','')}|{i}"
+            pid_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, stable))  # valid UUID string
 
-            payloads = []
-            for i in range(len(chunks)):
-                payloads.append({
-                    "doc_id": doc_id,   # align with retriever filter
-                    "chunk_id": f"{doc_id}:{os.path.basename(path)}:{i}",  # your readable ID lives here
-                    "profile": profile.get("name"),
-                    "doc_path": path,
-                    "chunk_idx": i,
-                    "text": chunks[i],
-                })
-            vdb.upsert(vectors=vecs, payloads=payloads, ids=ids)
-            try:
-                log.info("job.upsert.ok id=%s total_points=%s", job_id, vdb.count())
-            except Exception:
-                pass
-            chunks_done += len(chunks)
-            chunks_per_min = (len(chunks) / max(t1 - t0, 1e-6)) * 60.0
-            files_done += 1
-            db.update_progress(job_id, files_done=files_done, chunks_done=chunks_done, chunks_per_min=chunks_per_min)
-            log.info("job.file.done id=%s file=%s chunks=%s total_chunks=%s cpm=%.1f",
-                     job_id, os.path.basename(path), len(chunks), chunks_done, chunks_per_min)
+            # Optional: keep a short hash for human-readable debugging (not used as ID)
+            short_hash = hashlib.sha256(stable.encode("utf-8", errors="ignore")).hexdigest()[:32]
+
+            payload = {
+                "hash": short_hash,                  # for debugging/trace, NOT used as point ID
+                "doc_id": doc_id,                    # retriever filter
+                "chunk_id": f"{doc_id}:{meta.get('source','doc')}:{i}",
+                "profile": doc_id,
+                "doc_path": meta.get("doc_path") or meta.get("source") or "",
+                "chunk_idx": i,
+                "text": ch.get("text", ""),
+            }
+            # Pass-through useful metadata for retrieval/formatting
+            for k in ("section", "title", "source", "source_id", "path", "page_start", "page_end"):
+                if meta.get(k) is not None:
+                    payload[k] = meta.get(k)
+
+            payloads.append(payload)
+            ids.append(pid_uuid)  # <-- use deterministic UUIDv5
+
+        # Pass explicit UUIDs to Qdrant (compliant & idempotent)
+        vdb.upsert(vectors=vecs, payloads=payloads, ids=ids)
+        try:
+            log.info("job.upsert.ok id=%s total_points=%s", job_id, vdb.count())
+        except Exception:
+            pass
+
+        chunks_done = len(chunks)
+        chunks_per_min = (chunks_done / max(t1 - t0, 1e-6)) * 60.0
+        db.update_progress(job_id, files_done=files_total, pages_done=pages_total,
+                           chunks_done=chunks_done, chunks_per_min=chunks_per_min)
+        log.info("job.done.metrics id=%s chunks=%s cpm=%.1f", job_id, chunks_done, chunks_per_min)
 
         db.finish_job(job_id, status=JobStatus.COMPLETED)
         log.info("job.done id=%s status=completed", job_id)
+
     finally:
         await emb.close()
         _pop_task(job_id)  # cleanup from registry
@@ -236,9 +206,11 @@ async def enqueue_ingest(
     if not prof:
         raise HTTPException(status_code=404, detail=f"Profile '{profile_name}' not found")
 
-    pdfs = _profile_docs(prof)
-    if not pdfs:
-        raise HTTPException(status_code=400, detail=f"Profile '{profile_name}' has no PDF documents")
+    # Preflight counts without heavy loading (type-agnostic)
+    files_total = known_document_count(prof)
+    pages_total = estimate_pages_total(prof)
+    if files_total == 0:
+        raise HTTPException(status_code=400, detail=f"Profile '{profile_name}' has no documents to ingest")
 
     # Embedding/VDB meta for logging
     ecfg = EmbeddingConfig.from_profile(prof)
@@ -252,23 +224,10 @@ async def enqueue_ingest(
         ecfg.dim,
         collection,
     )
-    
-
-    # Preflight totals
-    files_total = len(pdfs)
-    pages_total = sum(
-        _count_selected_pages(
-            (d.get("path") or "").strip(),
-            include_spec=(d.get("include_pages") or prof.get("include_pages")),
-            exclude_spec=(d.get("exclude_pages") or prof.get("exclude_pages")),
-        )
-        for d in pdfs
-        if d.get("path") and os.path.exists(d.get("path"))
-    )
 
     db = JobsDB()
     canceled_prev = db.cancel_queued_or_running_for_profile(profile_name)
-    
+
     job_id = db.start_job(
         profile=profile_name,
         provider=(prof.get("embedding") or {}).get("backend", {}).get("primary", "unknown"),

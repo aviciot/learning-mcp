@@ -11,13 +11,20 @@ dependencies = [
   "httpx",
   "pypdf",
   "qdrant-client",
-  "fastapi-mcp",
+  "fastmcp>=0.2.0",
   "mcp[client]>=1.14.0",
   "autogen-agentchat>=0.2.0",
   "autogen-ext>=0.2.0",
   "openai>=1.40.0",
-    "tiktoken",
-  
+  "tiktoken",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "pytest-cov>=4.1.0",
+  "pytest-mock>=3.12.0",
 ]
 
 [build-system]
@@ -26,3 +33,43 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = [
+  "--strict-markers",
+  "--strict-config",
+  "-ra",
+  "--cov=src/learning_mcp",
+  "--cov-report=term-missing",
+  "--cov-report=html",
+  "--cov-branch",
+]
+
+[tool.coverage.run]
+source = ["src/learning_mcp"]
+omit = [
+  "*/tests/*",
+  "*/__pycache__/*",
+  "*/venv/*",
+  "*/tools/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "@abstractmethod",
+]
