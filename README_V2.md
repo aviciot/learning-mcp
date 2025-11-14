@@ -250,7 +250,23 @@ Ensure `profile.embedding.dim` matches your model's actual output:
 curl http://localhost:8014/debug/embed
 ```
 
-## 📚 Documentation
+## � Recent Bug Fixes
+
+**v2.0.1** - Fixed 5 critical bugs discovered during testing:
+
+1. **MCP Server Initialization** - Fixed `_get_embedder()` and `_get_vdb()` to accept profile config instead of using invalid singletons
+2. **VDB Async Methods** - Removed incorrect `await` from synchronous methods (`truncate()`, `ensure_collection()`)
+3. **JobsDB Filtering** - Added `profile` and `status` parameters to `list_jobs()` method
+4. **VDB Upsert API** - Updated job_server.py to use correct `upsert(vectors, payloads, ids)` signature
+5. **Variable Reference** - Fixed undefined `points` reference in completion logging
+
+**Test Coverage Improvements** (v2.0.1):
+- VDB tests: 14/14 passing (100%) with 60.69% coverage (+72% improvement)
+- Embeddings tests: 8/11 passing (73%) with 56.62% coverage (+9% improvement)
+- Overall: 26/38 tests passing (68.4%), 25.90% coverage baseline
+- Fixed async mocking, attribute names, and API signatures
+
+## �📚 Documentation
 
 - **Developer Guide**: See `.github/copilot-instructions.md` for conventions
 - **API Docs**: http://localhost:8014/docs (Swagger UI)

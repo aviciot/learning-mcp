@@ -8,7 +8,7 @@ from fastmcp import FastMCP, Context
 
 # Core logic imports
 from learning_mcp.config import get_config, get_profile
-from learning_mcp.embeddings import Embedder
+from learning_mcp.embeddings import Embedder, EmbeddingConfig
 from learning_mcp.vdb import VDB
 
 log = logging.getLogger("learning_mcp.mcp_server")
@@ -16,25 +16,24 @@ log = logging.getLogger("learning_mcp.mcp_server")
 # Initialize MCP server
 mcp = FastMCP("learning-mcp-server", dependencies=["qdrant-client", "httpx", "pypdf"])
 
-# Global state (lazy-loaded)
-_embedder: Optional[Embedder] = None
-_vdb: Optional[VDB] = None
+
+def _get_embedder(prof: dict) -> Embedder:
+    """Create embedder from profile config."""
+    ecfg = EmbeddingConfig.from_profile(prof)
+    return Embedder(ecfg)
 
 
-def _get_embedder() -> Embedder:
-    """Lazy-load embedder singleton."""
-    global _embedder
-    if _embedder is None:
-        _embedder = Embedder()
-    return _embedder
-
-
-def _get_vdb() -> VDB:
-    """Lazy-load VDB singleton."""
-    global _vdb
-    if _vdb is None:
-        _vdb = VDB()
-    return _vdb
+def _get_vdb(prof: dict) -> VDB:
+    """Create VDB instance from profile config."""
+    vcfg = prof.get("vectordb", {}) or {}
+    ecfg = EmbeddingConfig.from_profile(prof)
+    
+    return VDB(
+        url=vcfg.get("url"),
+        collection=vcfg.get("collection"),
+        dim=ecfg.dim,
+        distance=vcfg.get("distance", "cosine")
+    )
 
 
 @mcp.tool
@@ -59,19 +58,19 @@ async def search_docs(
         ctx.info(f"Searching profile '{profile}' for: {q[:50]}...")
     
     prof = get_profile(profile)
-    embedder = _get_embedder()
-    vdb = _get_vdb()
+    embedder = _get_embedder(prof)
+    vdb = _get_vdb(prof)
     
     # Embed query
-    query_vec = await embedder.embed_single(q)
+    query_vecs = await embedder.embed([q])
+    query_vec = query_vecs[0]
     
     # Search Qdrant
-    collection = prof.vectordb.collection
-    results = await vdb.search(
-        collection=collection,
-        query_vector=query_vec,
-        limit=min(top_k, 20),
-        score_threshold=prof.search.get("score_threshold", 0.5)
+    vcfg = prof.get("vectordb", {}) or {}
+    collection = vcfg.get("collection", profile)
+    results = vdb.search(
+        query_vec=query_vec,
+        top_k=min(top_k, 20)
     )
     
     if ctx:
