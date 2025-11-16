@@ -161,6 +161,8 @@ class VDB:
         """
         KNN search by vector. Optional `filter_by` is a simple equality dict merged into a Qdrant Filter.
         Example: filter_by={"doc_id": "user_guide_v1"}
+        
+        Returns: List of ScoredPoint objects (from QueryResponse.points)
         """
         if len(query_vec) != self.dim:
             raise ValueError(f"Query vector dim mismatch: got {len(query_vec)}, expected {self.dim}.")
@@ -174,13 +176,16 @@ class VDB:
                 must.append(FieldCondition(key=k, match=MatchValue(value=v)))
             qfilter = Filter(must=must)
 
-        return self.client.search(
+        response = self.client.query_points(
             collection_name=self.collection,
-            query_vector=query_vec,
+            query=query_vec,
             limit=top_k,
             with_payload=with_payload,
             query_filter=qfilter,
         )
+        
+        # query_points returns QueryResponse, extract .points list
+        return response.points if hasattr(response, 'points') else []
 
     def search_raw(self, **kwargs):
         """Direct passthrough to qdrant_client.search for advanced callers."""

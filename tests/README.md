@@ -7,12 +7,24 @@ Comprehensive test suite for Learning MCP v2.0 with 80% coverage target.
 ```
 tests/
 ├── conftest.py              # Shared fixtures and pytest config
-├── test_mcp_tools.py        # MCP integration tests (fastmcp Client)
-├── test_job_api.py          # FastAPI endpoint tests (TestClient)
 ├── test_core/               # Unit tests for core modules
 │   ├── test_embeddings.py   # Embedder, caching, fallback
 │   ├── test_vdb.py          # Qdrant wrapper (VDB)
 │   └── test_loaders.py      # PDF/JSON document loaders
+├── integration/             # Integration tests (services running)
+│   ├── test_search_integration.py    # End-to-end search workflow
+│   ├── test_api_planning.py          # AutoGen agent integration
+│   └── test_api_planning_simple.py   # Simplified agent tests
+├── manual/                  # Manual exploratory tests (not in CI)
+│   ├── test_gateway_flow.py          # Gateway architecture explanation
+│   ├── test_gateway_proof.py         # Gateway behavior proof
+│   ├── test_gateway_real.py          # Real Gateway API calls
+│   ├── test_check_gateway_config.py  # Query CF API for gateway config
+│   ├── test_gateway_tokens_explained.py  # Token authentication docs
+│   ├── test_mcp_search.py            # MCP search function test
+│   ├── test_search_http_simple.py    # HTTP MCP protocol test
+│   ├── test_search_skills.py         # Search metadata validation
+│   └── test_technical_skills.py      # Specific query search test
 └── fixtures/                # Sample test data
     └── sample.json          # Sample JSON document
 ```
@@ -52,18 +64,8 @@ pytest tests/test_mcp_tools.py::test_list_profiles -v
 
 ## Test Categories
 
-### 1. MCP Integration Tests (`test_mcp_tools.py`)
-- Uses `fastmcp.Client` in-memory testing (no network)
-- Tests all 3 MCP tools: `list_profiles`, `search_docs`, `plan_api_call`
-- Tests 1 resource: `profile://{name}`
-- Coverage: MCP tool logic, error handling, response structure
-
-### 2. Job API Tests (`test_job_api.py`)
-- Uses `fastapi.testclient.TestClient` for HTTP testing
-- Tests 5 endpoints: POST /ingest/jobs, GET /jobs, GET /jobs/{id}, POST /ingest/cancel_all, GET /health
-- Coverage: Job lifecycle, status tracking, cancellation, validation
-
-### 3. Core Module Tests (`test_core/`)
+### 1. Unit Tests (`test_core/`)
+Fast, isolated tests for core modules (no external dependencies).
 
 #### `test_embeddings.py`
 - Embedder initialization (Ollama/Cloudflare)
@@ -88,6 +90,54 @@ pytest tests/test_mcp_tools.py::test_list_profiles -v
 - Metadata preservation
 - Invalid file handling
 - Type dispatch via `load_document()`
+
+### 2. Integration Tests (`integration/`)
+Full workflow tests requiring running services (Qdrant, Ollama/Cloudflare API).
+
+#### `test_search_integration.py`
+- End-to-end semantic search workflow
+- Document ingestion → chunking → embedding → vector search
+- Profile-specific configurations
+- Multi-document retrieval with hints
+
+#### `test_api_planning.py`
+- AutoGen agent integration (planner + critic loop)
+- Retriever → AutoGen → API plan generation
+- YAML-driven system message templates
+- Evidence evaluation and iterative refinement
+
+#### `test_api_planning_simple.py`
+- Simplified AutoGen tests for basic scenarios
+- Direct API planning without complex loops
+- Faster feedback for common cases
+
+### 3. Manual Tests (`manual/`)
+Exploratory tests for understanding and debugging (not run in CI).
+
+#### Gateway Architecture Tests
+- **`test_gateway_flow.py`**: Conceptual explanation of Cloudflare AI Gateway flow
+- **`test_gateway_proof.py`**: Side-by-side comparison (direct vs. Gateway calls)
+- **`test_gateway_real.py`**: Real API calls through Gateway (with provider keys)
+- **`test_check_gateway_config.py`**: Query Cloudflare API to inspect gateway config
+- **`test_gateway_tokens_explained.py`**: Authentication token documentation
+
+#### Search/MCP Tests
+- **`test_mcp_search.py`**: Direct test of MCP search_docs function
+- **`test_search_http_simple.py`**: HTTP MCP protocol test via /mcp endpoint
+- **`test_search_skills.py`**: Validate search results after metadata removal
+- **`test_technical_skills.py`**: Test specific "technical skills" query
+
+**When to run**: Manual exploration, architectural verification, debugging search/MCP issues
+
+**Usage**:
+```powershell
+# Run from root directory
+docker cp tests/manual/test_gateway_proof.py learning-mcp:/app/
+docker compose exec learning-mcp python /app/test_gateway_proof.py
+
+# Or run search tests
+docker compose exec learning-mcp python tests/manual/test_search_skills.py
+```
 
 ## Coverage Targets
 

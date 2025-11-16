@@ -11,6 +11,13 @@ from learning_mcp.config import get_config, get_profile
 from learning_mcp.embeddings import Embedder, EmbeddingConfig
 from learning_mcp.vdb import VDB
 
+# Configure logging to show all INFO level messages including emojis
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 log = logging.getLogger("learning_mcp.mcp_server")
 
 # Initialize MCP server
@@ -155,20 +162,37 @@ async def plan_api_call(
         }
     
     if ctx:
-        ctx.info(f"Planning API call for goal: {goal}")
+        await ctx.info(f"Planning API call for goal: {goal}")
     
-    # Search for relevant docs
-    search_results = await search_docs(q=goal, profile=profile, top_k=10, ctx=ctx)
+    # Search for relevant docs (call helper directly, not the decorated tool)
+    prof = get_profile(profile)
+    embedder = _get_embedder(prof)
+    vdb = _get_vdb(prof)
+    
+    try:
+        # Embed query
+        query_vecs = await embedder.embed([goal])
+        query_vec = query_vecs[0]
+        
+        # Search Qdrant
+        results = vdb.search(query_vec=query_vec, top_k=10)
+        
+        # Format results for AutoGen
+        context_chunks = [r.payload.get("text", "") for r in results]
+        
+        if ctx:
+            await ctx.info(f"Found {len(results)} relevant docs")
+    finally:
+        await embedder.close()
     
     # Use AutoGen planner
     plan = await plan_with_autogen(
-        goal=goal,
-        context_chunks=[r["text"] for r in search_results["results"]],
+        q=goal,
         profile=profile
     )
     
     if ctx:
-        ctx.info(f"Generated plan: {plan.get('endpoint', 'N/A')}")
+        await ctx.info(f"Generated plan: {plan.get('endpoint', 'N/A')}")
     
     return plan
 
