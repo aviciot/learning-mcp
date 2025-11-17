@@ -19,6 +19,24 @@ class Settings(BaseSettings):
             return {"version": 1, "profiles": []}
         with p.open("r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {"version": 1, "profiles": []}
+    
+    def get_enabled_mcp_tools(self) -> list[str]:
+        """
+        Get list of enabled MCP tools from configuration.
+        
+        Returns:
+            List of enabled tool names. Defaults to all tools if not configured.
+        """
+        config = self.load_profiles()
+        mcp_config = config.get("mcp", {})
+        return mcp_config.get("enabled_tools", [
+            "search_docs",
+            "list_profiles",
+            "list_user_github_repos",
+            "search_github_repos",
+            "get_github_file",
+            "plan_api_call"
+        ])
 
 settings = Settings()
 

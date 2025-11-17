@@ -118,6 +118,41 @@ PORT=8013
 LOG_LEVEL=info
 ```
 
+### MCP Tool Configuration
+
+Control which MCP tools are exposed via the MCP protocol in `config/learning.yaml`:
+
+```yaml
+version: 1
+
+# Global MCP configuration
+mcp:
+  enabled_tools:
+    - search_docs              # Semantic search over documents
+    - list_profiles            # List available profiles
+    - list_user_github_repos   # List GitHub repos (requires profile with github.username)
+    - search_github_repos      # Search GitHub repository files
+    - get_github_file          # Get specific GitHub file content
+    - plan_api_call            # AutoGen API planning (requires autogen_hints)
+  # To disable a tool, comment it out or remove it from the list
+  # Requires container restart to apply changes
+```
+
+**Example - Disable GitHub and AutoGen tools:**
+
+```yaml
+mcp:
+  enabled_tools:
+    - search_docs
+    - list_profiles
+```
+
+After editing, restart the container:
+
+```bash
+docker compose restart learning-mcp
+```
+
 ### Profile System
 
 Profiles defined in `config/learning.yaml`:

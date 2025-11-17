@@ -1,5 +1,16 @@
 version: 1
 
+# Global MCP configuration
+mcp:
+  enabled_tools:
+    - search_docs
+    - list_profiles
+    - list_user_github_repos
+    - search_github_repos
+    - get_github_file
+    - plan_api_call
+  # To disable a tool, comment it out or remove it from the list
+
 profiles:
 
   - name: avi-cohen
