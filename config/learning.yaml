@@ -3,6 +3,9 @@ version: 1
 profiles:
 
   - name: avi-cohen
+    github:
+      username: aviciot
+    
     documents:
       - type: json
         path: /app/data/persons/avi_profile.json

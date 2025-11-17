@@ -231,17 +231,21 @@ async def get_profile_config(name: str) -> str:
 @mcp.tool
 async def search_github_repos(
     query: str,
+    profile: str = "avi-cohen",
     limit: int = 10,
     sort: str = "stars",
     ctx: Context = None
 ) -> dict:
     """
-    Search GitHub repositories.
+    Search GitHub repositories (scoped to profile's GitHub user by default).
     
     Use this to find repositories by keywords, topics, or usernames.
+    If the profile has a github.username configured, it will automatically
+    scope searches to that user unless you specify a different user: or org:
     
     Args:
-        query: Search query (e.g., "RAG", "RAG user:aviciot", "machine learning language:python")
+        query: Search keywords (e.g., "RAG", "machine learning")
+        profile: Profile name (uses github.username from config if available)
         limit: Maximum number of results to return (default 10, max 30)
         sort: Sort results by 'stars', 'forks', or 'updated' (default 'stars')
     
@@ -249,10 +253,24 @@ async def search_github_repos(
         dict with 'repositories' list containing name, description, url, stars, etc.
     
     Examples:
-        - "RAG user:aviciot" - Find RAG repos by user aviciot
-        - "machine learning language:python" - ML repos in Python
-        - "vector database" - Search for vector DB projects
+        - query="RAG", profile="avi-cohen" → searches "RAG user:aviciot" (auto-scoped)
+        - query="RAG user:microsoft" → explicit user override
+        - query="machine learning language:python" → searches all GitHub
     """
+    # Load profile config and get GitHub username
+    try:
+        prof = get_profile(profile)
+        github_username = prof.get("github", {}).get("username")
+        
+        # Auto-inject username if configured and not already in query
+        if github_username and "user:" not in query and "org:" not in query:
+            query = f"{query} user:{github_username}"
+            if ctx:
+                ctx.info(f"Auto-scoped to user: {github_username}")
+    except Exception as e:
+        log.warning(f"Could not load profile '{profile}': {e}")
+        # Continue without profile scoping
+    
     if ctx:
         ctx.info(f"Searching GitHub for: {query}")
     
@@ -269,6 +287,7 @@ async def search_github_repos(
         
         return {
             "query": query,
+            "profile": profile,
             "count": len(repos),
             "repositories": repos
         }
@@ -335,18 +354,19 @@ async def get_github_file(
 
 @mcp.tool
 async def list_user_github_repos(
-    username: str,
+    profile: str = "avi-cohen",
     limit: int = 30,
     type_filter: str = "all",
     ctx: Context = None
 ) -> dict:
     """
-    List all repositories for a GitHub user.
+    List repositories for the profile's GitHub user.
     
     Use this to get an overview of all repos owned by a user or organization.
+    Uses the github.username configured in the profile.
     
     Args:
-        username: GitHub username or organization name
+        profile: Profile name (uses github.username from config)
         limit: Maximum number of repos to return (default 30, max 100)
         type_filter: Filter by 'all', 'owner' (repos user owns), or 'member' (repos user contributes to)
     
@@ -354,16 +374,35 @@ async def list_user_github_repos(
         dict with 'repositories' list sorted by most recently updated
     
     Examples:
-        - username="aviciot", limit=50
-        - username="microsoft", type_filter="owner"
+        - profile="avi-cohen", limit=50 → lists repos for aviciot
+        - profile="company-docs" → lists repos for company's GitHub user
     """
+    # Load profile config and get GitHub username
+    try:
+        prof = get_profile(profile)
+        github_username = prof.get("github", {}).get("username")
+        
+        if not github_username:
+            return {
+                "error": f"Profile '{profile}' has no github.username configured",
+                "profile": profile,
+                "repositories": []
+            }
+    except Exception as e:
+        log.error(f"Could not load profile '{profile}': {e}")
+        return {
+            "error": f"Profile '{profile}' not found",
+            "profile": profile,
+            "repositories": []
+        }
+    
     if ctx:
-        ctx.info(f"Listing repositories for user: {username}")
+        ctx.info(f"Listing repositories for user: {github_username} (profile: {profile})")
     
     try:
         github = _get_github_client()
         repos = await github.list_user_repos(
-            username=username,
+            username=github_username,
             limit=min(limit, 100),
             type_filter=type_filter
         )
@@ -372,7 +411,8 @@ async def list_user_github_repos(
             ctx.info(f"Found {len(repos)} repositories")
         
         return {
-            "username": username,
+            "username": github_username,
+            "profile": profile,
             "count": len(repos),
             "repositories": repos
         }
@@ -380,7 +420,8 @@ async def list_user_github_repos(
         log.error(f"Error listing user repos: {e}")
         return {
             "error": str(e),
-            "username": username,
+            "username": github_username,
+            "profile": profile,
             "repositories": []
         }
 

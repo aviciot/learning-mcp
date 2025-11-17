@@ -123,6 +123,28 @@ LOG_LEVEL=info
 Profiles defined in `config/learning.yaml`:
 
 ```yaml
+avi-cohen:
+  github:
+    username: aviciot  # Used by GitHub search tools
+  
+  documents:
+    - type: json
+      path: /app/data/persons/avi_profile.json
+  
+  chunking:
+    size: 600
+    overlap: 100
+  
+  embedding:
+    dim: 384
+    backend:
+      primary: cloudflare
+      fallback: ollama
+  
+  vectordb:
+    collection: avi-cohen
+    distance: Cosine
+
 dahua-camera:
   documents:
     - type: pdf
@@ -190,9 +212,9 @@ See **[docs/README.md](docs/README.md)** for complete configuration guide.
 |------|---------|----------------|
 | `search_docs` | **Document Search** - Vector similarity search over ingested documentation. Returns ranked chunks with metadata and scores. | `q` (query text), `profile` (doc set), `top_k` (result limit, default 5) |
 | `plan_api_call` | **API Planning** - AutoGen multi-agent system generates API calls from natural language using planner + critic loop. Requires documentation ingestion first. | `q` (goal description), `profile` (API docs), `autogen_model` (optional LLM) |
-| `search_github_repos` | **GitHub Search** - Search GitHub repositories by query. Supports advanced search syntax (user:, org:, language:, stars:). Requires GITHUB_PERSONAL_ACCESS_TOKEN. | `query` (search text), `limit` (max results, default 10) |
+| `search_github_repos` | **GitHub Search** - Search repositories by keywords. Auto-scopes to profile's GitHub username if configured. Override with explicit `user:` or `org:` in query. | `query` (search text), `profile` (default: avi-cohen), `limit` (max results, default 10) |
 | `get_github_file` | **GitHub File Reader** - Retrieve file contents from any accessible GitHub repository. Returns decoded content with metadata. | `owner` (repo owner), `repo` (repo name), `path` (file path), `ref` (branch/tag, default: main) |
-| `list_user_github_repos` | **GitHub Repo List** - List all repositories for a GitHub user or organization. Returns name, description, stars, language. | `username` (GitHub user/org), `limit` (max results, default 10) |
+| `list_user_github_repos` | **GitHub Repo List** - List all repositories for the profile's GitHub user. Uses `github.username` from profile config. | `profile` (default: avi-cohen), `limit` (max results, default 30), `type_filter` (all/owner/member) |
 
 **Swagger UI**: `http://localhost:8013/docs`
 
@@ -223,7 +245,10 @@ curl http://localhost:8014/jobs
 curl -X POST http://localhost:8013/search/api_context -H "Content-Type: application/json" -d '{"q":"wifi settings","profile":"dahua-camera"}'
 
 # Test GitHub search
-curl -X POST http://localhost:8013/tools/call -H "Content-Type: application/json" -d '{"name":"search_github_repos","arguments":{"query":"Python RAG","limit":5}}'
+curl -X POST http://localhost:8013/tools/call -H "Content-Type: application/json" -d '{"name":"search_github_repos","arguments":{"query":"RAG","profile":"avi-cohen","limit":5}}'
+
+# Test list repos
+curl -X POST http://localhost:8013/tools/call -H "Content-Type: application/json" -d '{"name":"list_user_github_repos","arguments":{"profile":"avi-cohen","limit":10}}'
 ```
 
 See **[docs/development/mcp-testing-guide.md](docs/development/mcp-testing-guide.md)** for comprehensive testing strategies.

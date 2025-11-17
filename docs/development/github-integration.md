@@ -4,26 +4,40 @@
 
 GitHub tools are now integrated directly into Learning MCP! No separate service needed.
 
+**Key Feature**: GitHub searches are automatically scoped to your profile's configured username, making queries simpler and more intuitive.
+
 ## New Tools Available
 
 ### 1. `search_github_repos`
-Search GitHub repositories by keywords, topics, or users.
+Search GitHub repositories by keywords (auto-scoped to your profile's GitHub user).
 
-**Example:**
+**Simple Example (Recommended):**
 ```json
 {
   "tool": "search_github_repos",
   "arguments": {
-    "query": "RAG user:aviciot",
-    "limit": 10,
-    "sort": "stars"
+    "query": "RAG",
+    "profile": "avi-cohen",
+    "limit": 10
   }
 }
 ```
+*This automatically searches "RAG user:aviciot" because avi-cohen profile has `github.username: aviciot`*
+
+**Override with explicit user:**
+```json
+{
+  "query": "RAG user:microsoft",
+  "profile": "avi-cohen"
+}
+```
+*Searches Microsoft's repos instead*
 
 **Response:**
 ```json
 {
+  "query": "RAG user:aviciot",
+  "profile": "avi-cohen",
   "count": 3,
   "repositories": [
     {
@@ -64,22 +78,49 @@ Read any file from a GitHub repository.
 ```
 
 ### 3. `list_user_github_repos`
-List all repositories for a user or organization.
+List all repositories for the profile's GitHub user.
 
-**Example:**
+**Simple Example (Recommended):**
 ```json
 {
   "tool": "list_user_github_repos",
   "arguments": {
-    "username": "aviciot",
+    "profile": "avi-cohen",
     "limit": 30
   }
+}
+```
+*Automatically lists repos for `aviciot` (from profile config)*
+
+**Response:**
+```json
+{
+  "username": "aviciot",
+  "profile": "avi-cohen",
+  "count": 15,
+  "repositories": [...]
 }
 ```
 
 ## Setup
 
-### 1. Get GitHub Personal Access Token
+### 1. Configure GitHub Username in Profile
+
+Edit `config/learning.yaml`:
+
+```yaml
+avi-cohen:
+  github:
+    username: aviciot  # Your GitHub username
+  
+  documents:
+    - type: json
+      path: /app/data/persons/avi_profile.json
+  
+  # ... rest of profile config
+```
+
+### 2. Get GitHub Personal Access Token
 
 1. Go to: https://github.com/settings/tokens
 2. Click "Generate new token (classic)"
@@ -88,14 +129,14 @@ List all repositories for a user or organization.
    - `repo` (for private repos - optional)
 4. Copy the token: `ghp_xxxxxxxxxxxxx`
 
-### 2. Add to `.env` File
+### 3. Add to `.env` File
 
 ```bash
 # Add this line to your .env file
 GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your_token_here
 ```
 
-### 3. Restart Docker
+### 4. Restart Docker
 
 ```powershell
 docker compose restart learning-mcp
