@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 import re
 import json
+import time
 import logging
 from typing import Any, Dict, Optional, Tuple, List
 
@@ -33,6 +34,21 @@ import httpx
 
 log = logging.getLogger("autogen_agent")
 log.setLevel(logging.INFO)
+
+# Temporarily enable DEBUG logging for httpx to see Gateway error responses
+logging.getLogger("httpx").setLevel(logging.DEBUG)
+
+# Also log the actual request body being sent
+import logging as _logging
+_logging.basicConfig(level=_logging.DEBUG)
+
+# Log level control: 'minimal' or 'full' (default)
+LOG_LEVEL = os.getenv("AUTOGEN_LOG_LEVEL", "full").lower()
+print(f"[AUTOGEN_PLANNER] LOG_LEVEL='{LOG_LEVEL}' (from env AUTOGEN_LOG_LEVEL)")
+
+def _should_log_detail() -> bool:
+    """Return True if detailed logging is enabled."""
+    return LOG_LEVEL != "minimal"
 
 # Lazy imports so the server can still boot if autogen isn't installed.
 try:
@@ -45,11 +61,14 @@ except Exception as e:
     OpenAIChatCompletionClient = None
     ModelInfo = None
 
-BASE_URL = os.getenv("API_AGENT_BASE_URL", "http://localhost:8013").rstrip("/")
+BASE_URL = os.getenv("API_AGENT_BASE_URL", "http://localhost:8014").rstrip("/")
 BACKEND = os.getenv("AUTOGEN_BACKEND", "cloudflare")
 MODEL = os.getenv("AUTOGEN_MODEL", "@cf/meta/llama-3.1-8b-instruct")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE = os.getenv("OPENAI_BASE_URL")
+
+USE_AI_GATEWAY = os.getenv("USE_AI_GATEWAY", "false").lower() == "true"
+CF_GATEWAY_TOKEN = os.getenv("CF_GATEWAY_TOKEN")
 
 MAX_LOOPS = int(os.getenv("AUTOGEN_MAX_LOOPS", "3"))
 SEARCH_TIMEOUT_S = float(os.getenv("API_AGENT_SEARCH_TIMEOUT", "90"))
@@ -243,21 +262,55 @@ async def _fetch_evidence(q: str, profile: str | None) -> Tuple[list[dict], Opti
 # Client & Agents
 # -----------------------
 def _make_client() -> Tuple[Optional[OpenAIChatCompletionClient], Optional[str]]:
-    """Initialize OpenAI-compatible client (CF/OpenAI/Ollama via /v1)."""
+    """Initialize OpenAI-compatible client (CF/Groq/Ollama via /v1)."""
     try:
-        client = OpenAIChatCompletionClient(
-            model=MODEL,
-            api_key=OPENAI_KEY,
-            base_url=OPENAI_BASE,
-            model_info=ModelInfo(
-                vision=False,
-                function_calling=False,  # manual “no tools” mode
-                json_output=True,
-                structured_output=False,
-                family="unknown",
-            ),
-        )
-        log.info("autogen.client.init base=%s backend=%s", OPENAI_BASE, BACKEND)
+        # When using AI Gateway WITH stored provider keys:
+        # - Gateway has the Groq API key stored under "Provider Keys"
+        # - We only need CF_GATEWAY_TOKEN to authenticate to the Gateway
+        # - Use dummy API key for OpenAI client (required by library but Gateway ignores it)
+        if USE_AI_GATEWAY and CF_GATEWAY_TOKEN:
+            log.info("autogen.client.gateway enabled model=%s base_url=%s", MODEL, OPENAI_BASE)
+            
+            # For Dynamic Routing via Gateway with BYOK (Bring Your Own Key):
+            # - cf-aig-authorization: Gateway authentication
+            # - Authorization: Provider API key (Groq) - added automatically by OpenAI client from api_key param
+            # Both headers are required for Dynamic Routing
+            
+            client_kwargs = {
+                "model": MODEL,  # e.g., dynamic/chat-default for Dynamic Routing
+                "api_key": OPENAI_KEY,  # Groq API key - OpenAI client adds as Authorization: Bearer <key>
+                "base_url": OPENAI_BASE,  # e.g., https://.../compat (client appends /chat/completions)
+                "model_info": ModelInfo(
+                    vision=False,
+                    function_calling=False,
+                    json_output=False,
+                    structured_output=False,
+                    family="unknown",
+                ),
+                "http_client": httpx.AsyncClient(
+                    headers={
+                        "cf-aig-authorization": f"Bearer {CF_GATEWAY_TOKEN}",
+                    },
+                    timeout=60.0,
+                ),
+            }
+        else:
+            # Direct provider call (not using Gateway) - need real provider API key
+            log.info("autogen.client.direct (no gateway) base=%s backend=%s", OPENAI_BASE, BACKEND)
+            client_kwargs = {
+                "model": MODEL,
+                "api_key": OPENAI_KEY,  # Real provider API key required
+                "base_url": OPENAI_BASE,
+                "model_info": ModelInfo(
+                    vision=False,
+                    function_calling=False,
+                    json_output=True,
+                    structured_output=False,
+                    family="unknown",
+                ),
+            }
+        
+        client = OpenAIChatCompletionClient(**client_kwargs)
         return client, None
     except Exception as e:
         return None, f"Client init failed: {e}"
@@ -283,7 +336,12 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
     Generate an API call plan using a planner+critic loop with YAML-driven
     system messages. Returns enriched payload on success or needs_input on failure.
     """
-    log.info("autogen.v2.start q=%s profile=%s backend=%s model=%s", q, profile, BACKEND, MODEL)
+    # Always log flow start (both minimal and full)
+    log.info("=" * 80)
+    log.info("🚀 AUTOGEN: %s [%s]", q, profile or "default")
+    if _should_log_detail():
+        log.info("  Backend: %s | Model: %s | Gateway: %s", BACKEND, MODEL, USE_AI_GATEWAY)
+    log.info("=" * 80)
 
     if AssistantAgent is None or OpenAIChatCompletionClient is None:
         return {"status": "needs_input", "reason": "AutoGen not installed"}
@@ -322,17 +380,27 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
     all_hits: List[dict] = []
     queries: List[str] = [q]
 
+    session_start = time.time()
+    total_llm_calls = 0
+    
     for loop_idx in range(1, MAX_LOOPS + 1):
-        log.info("autogen.loop.start idx=%s queries=%s", loop_idx, queries)
+        # Always log loop header
+        log.info("")
+        log.info("━" * 80)
+        log.info("🔄 LOOP %d/%d", loop_idx, MAX_LOOPS)
+        log.info("   Query: %s", queries[0] if queries else "N/A")
+        log.info("━" * 80)
 
         # 1) Search (merge new hits)
+        log.info("🔍 SEARCH: Retrieving relevant documents...")
         new_hits_all: List[dict] = []
         for qtext in queries:
             try:
                 hits = await _search_once(qtext, profile or "default")
                 new_hits_all.extend(hits)
+                log.info("  ✅ Found %d chunks for query: '%s'", len(hits), qtext[:60])
             except Exception as e:
-                log.warning("autogen.search.error q=%s err=%s", qtext, e)
+                log.warning("  ❌ Search error: %s", e)
 
         # If we found nothing new, keep working with what we have
         if not new_hits_all and not all_hits:
@@ -340,7 +408,7 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
 
         if new_hits_all:
             all_hits.extend(new_hits_all)
-            log.info("autogen.search.hit q=%s count=%s", queries[0], len(new_hits_all))
+            # Removed duplicate log - already logged with emoji above
 
         # Top-3 preview for the planner
         preview = []
@@ -359,6 +427,8 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
             )
 
         # 2) Planner: first pass
+        log.info("🤖 PLANNER: Generating API plan from evidence...")
+        total_llm_calls += 1
         plan_task = (
             "Given the EVIDENCE below and the USER QUERY, produce STRICT JSON.\n"
             "Required keys: endpoint (string), method (string), params (object), provenance (object with top_hit).\n"
@@ -366,13 +436,15 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
             f"USER QUERY: {q}\n\n"
             f"EVIDENCE (top-3): {json.dumps(preview, ensure_ascii=False)}"
         )
-        log.info("autogen.planner.prompt idx=%s prompt=%s", loop_idx, plan_task[:1024])
         try:
             plan_reply = await planner.run(task=plan_task)
             plan_text = _extract_text_from_reply(plan_reply) or ""
+            log.info("  📄 Planner response (%d chars)", len(plan_text))
             candidate_plan, jerr = _parse_json_strict(plan_text)
             if not candidate_plan:
                 # 3) Planner: repair pass
+                log.info("  ⚠️  Plan JSON invalid, requesting repair...")
+                total_llm_calls += 1
                 repair_prompt = (
                     "The previous output was not valid JSON or missing required keys.\n"
                     "Repair it to STRICT, VALID, MINIFIED JSON ONLY. No code fences. No comments. No extra text.\n"
@@ -382,11 +454,31 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
                 repair_reply = await planner.run(task=repair_prompt)
                 plan_text = _extract_text_from_reply(repair_reply) or ""
                 candidate_plan, _ = _parse_json_strict(plan_text)
+                if candidate_plan:
+                    log.info("  ✅ Repair successful")
+            
+            # Log planner's output
+            if candidate_plan and isinstance(candidate_plan, dict):
+                log.info("📝 PLANNER Output:")
+                log.info("   Endpoint: %s", candidate_plan.get("endpoint", "N/A"))
+                log.info("   Method: %s", candidate_plan.get("method", "N/A"))
+                if candidate_plan.get("params"):
+                    log.info("   Params: %s", list(candidate_plan["params"].keys()))
+                if candidate_plan.get("body"):
+                    log.info("   Body: %s", list(candidate_plan["body"].keys()) if isinstance(candidate_plan["body"], dict) else "...")
+                    
         except Exception as e:
+            log.error("autogen.planner.error loop=%s error=%s type=%s", loop_idx, e, type(e).__name__)
+            # Log more details if it's an HTTP error
+            if hasattr(e, 'response'):
+                log.error("  HTTP Status: %s", getattr(e.response, 'status_code', 'N/A'))
+                log.error("  Response Body: %s", getattr(e.response, 'text', 'N/A')[:500])
             return {"status": "needs_input", "reason": f"AutoGen failed to plan: {e}"}
 
         # If still no valid JSON, let critic suggest next searches (generic)
         if not candidate_plan or not isinstance(candidate_plan, dict):
+            log.info("🧐 CRITIC: Plan invalid, requesting guidance...")
+            total_llm_calls += 1
             critic_task = (
                 "Plan output is invalid or missing. "
                 "Provide next_search (short keyword queries) and what's missing. JSON only."
@@ -398,6 +490,7 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
                 cobj, _ = _parse_json_strict(ctext)
                 missing = (cobj or {}).get("missing") or []
                 next_search = (cobj or {}).get("next_search") or []
+                log.info("  💡 CRITIC suggestions: %s", ", ".join(next_search[:3]) if next_search else "retry same query")
             except Exception:
                 missing, next_search = ["valid JSON plan"], []
             trace.append(
@@ -409,6 +502,12 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
             continue
 
         # 4) Critic: evaluate candidate plan
+        log.info("🧐 CRITIC: Reviewing plan...")
+        total_llm_calls += 1
+        if candidate_plan:
+            log.info("  📋 Proposed: %s %s", 
+                    candidate_plan.get("method", "?"), 
+                    candidate_plan.get("endpoint", "?"))
         try:
             c_in = {
                 "endpoint": candidate_plan.get("endpoint"),
@@ -422,7 +521,6 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
                 "Top evidence (minified):\n"
                 f"{json.dumps(preview, ensure_ascii=False)}"
             )
-            log.info("autogen.critic.prompt idx=%s prompt=%s", loop_idx, critic_prompt[:1024])
             critic_reply = await critic.run(task=critic_prompt)
             ctext = _extract_text_from_reply(critic_reply) or ""
             cobj, _ = _parse_json_strict(ctext)
@@ -434,6 +532,12 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
         missing = (cobj or {}).get("missing") or []
         next_search = (cobj or {}).get("next_search") or []
         risk_flags = (cobj or {}).get("risk_flags") or []
+
+        log.info("  📊 Critic verdict: %s (confidence: %.2f)", verdict, confidence)
+        if missing:
+            log.info("  ⚠️  Missing: %s", ", ".join(missing))
+        if next_search:
+            log.info("  💡 Suggested next searches: %s", ", ".join(next_search[:3]))
 
         trace.append(
             {
@@ -451,6 +555,11 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
         )
 
         # 5) Acceptance (simple & YAML-guided)
+        verdict = cobj.get("verdict", "fail")
+        confidence = float(cobj.get("confidence") or 0.0)
+        missing = cobj.get("missing") or []
+        next_search = cobj.get("next_search") or []
+        
         endpoint_ok = _valid_endpoint(candidate_plan.get("endpoint", ""), allow_pattern, forbid_patterns)
         method = (candidate_plan.get("method") or "").upper()
         params = candidate_plan.get("params") or {}
@@ -461,21 +570,56 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
 
         # Accept READ when endpoint matches pattern, action=getConfig, and has a 'name' feature
         if endpoint_ok and is_read and has_feature:
-            log.info("autogen.accept.read idx=%s conf=%.2f", loop_idx, confidence)
+            log.info("✅ ACCEPTED: Read operation (endpoint matches, has feature)")
+            session_time = time.time() - session_start
+            log.info("")
+            log.info("━" * 80)
+            log.info("📊 EXECUTION SUMMARY")
+            log.info("   Loops used: %d/%d", loop_idx, MAX_LOOPS)
+            log.info("   LLM calls: %d", total_llm_calls)
+            log.info("   Final confidence: %.2f", confidence)
+            log.info("   Status: ✅ ACCEPTED (READ)")
+            log.info("   Execution time: %.2fs", session_time)
+            log.info("━" * 80)
             return _final_ok(candidate_plan, confidence, all_hits, missing, next_search, trace)
 
         # Accept WRITE only if endpoint OK AND critic didn't flag missing example (when required)
         if endpoint_ok and is_write:
             if not write_req_example or ("example" not in " ".join(missing).lower()):
-                log.info("autogen.accept.write idx=%s conf=%.2f", loop_idx, confidence)
+                log.info("✅ ACCEPTED: Write operation (endpoint matches, sufficient evidence)")
+                session_time = time.time() - session_start
+                log.info("")
+                log.info("━" * 80)
+                log.info("📊 EXECUTION SUMMARY")
+                log.info("   Loops used: %d/%d", loop_idx, MAX_LOOPS)
+                log.info("   LLM calls: %d", total_llm_calls)
+                log.info("   Final confidence: %.2f", confidence)
+                log.info("   Status: ✅ ACCEPTED (WRITE)")
+                log.info("   Execution time: %.2fs", session_time)
+                log.info("━" * 80)
                 return _final_ok(candidate_plan, confidence, all_hits, missing, next_search, trace)
 
         # Not accepted → iterate or stop
         if loop_idx >= MAX_LOOPS:
+            log.info("❌ REJECTED: Max loops reached (%d/%d)", loop_idx, MAX_LOOPS)
+            log.info("   Reason: %s", ", ".join(missing) if missing else "Insufficient evidence")
+            session_time = time.time() - session_start
+            log.info("")
+            log.info("━" * 80)
+            log.info("📊 EXECUTION SUMMARY")
+            log.info("   Loops used: %d/%d", loop_idx, MAX_LOOPS)
+            log.info("   LLM calls: %d", total_llm_calls)
+            log.info("   Final confidence: %.2f", confidence)
+            log.info("   Status: ❌ NEEDS_INPUT (Max loops)")
+            log.info("   Execution time: %.2fs", session_time)
+            log.info("━" * 80)
             ask = "Not enough information in docs after iterative search. Missing: " + ", ".join(missing) if missing else "Insufficient information."
             return _final_needs_input(all_hits, trace, missing, reason=ask)
 
         # Prepare next queries
+        log.info("⏭️  Plan not accepted yet - continuing to loop %d/%d", loop_idx + 1, MAX_LOOPS)
+        if missing:
+            log.info("   Reason: Missing %s", ", ".join(missing[:3]))
         if next_search:
             queries = next_search
         else:
@@ -483,6 +627,8 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
             queries = queries
 
     # Shouldn't reach here normally
+    log.warning("⚠️  Unexpected: Loop exited without acceptance or rejection")
+    log.info("=" * 80)
     return _final_needs_input(all_hits, trace, ["plan not accepted"], reason="Loop budget exhausted")
 
 
@@ -490,54 +636,36 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
 # Finalizers
 # -----------------------
 def _final_ok(candidate_plan: dict, confidence: float, all_hits: List[dict], missing: List[str], next_search: List[str], trace: List[dict]) -> dict:
-    # Build evidence summary
-    evidence_used = {}
-    for h in all_hits:
-        k = h.get("doc_path") or "?"
-        evidence_used.setdefault(k, []).append(h.get("chunk_idx"))
-    evidence_used_list = [{"doc": k, "hits": v[:10]} for k, v in evidence_used.items()]
-
-    # Extract alt terms
-    alt_terms: List[str] = []
-    for h in all_hits:
-        qc = (h.get("hints") or {}).get("query_candidates") or {}
-        alt_terms.extend(list(qc.keys()))
-    alt_terms = list(dict.fromkeys(alt_terms))[:10]
-
-    tips = [
-        "Include exact feature names (e.g., 'AudioEncode') in queries.",
-        "Add the word 'example' or 'URL Syntax' to find callable forms.",
-        "If changing settings, specify channel/stream.",
-    ]
-
+    # Log execution summary
+    log.info("🎯 EXECUTION SUMMARY:")
+    log.info("  • Total loops: %d", len(trace))
+    log.info("  • Plan: %s %s", candidate_plan.get("method"), candidate_plan.get("endpoint"))
+    log.info("  • Confidence: %.2f", confidence)
+    log.info("  • Evidence chunks: %d", len(all_hits))
+    if missing:
+        log.info("  • Still missing: %s", ", ".join(missing))
+    log.info("=" * 80)
+    
+    # Simple response focused on what user needs
     return {
         "status": "ok",
-        "source": "autogen",
-        "plan": candidate_plan,
+        "plan": {
+            "endpoint": candidate_plan.get("endpoint"),
+            "method": candidate_plan.get("method"),
+            "params": candidate_plan.get("params", {}),
+            "body": candidate_plan.get("body"),
+        },
         "confidence": confidence,
-        "evidence_used": evidence_used_list[:5],
-        "missing_info": missing,
-        "recommended_queries": next_search[:6],
-        "alt_terms": alt_terms,
-        "ask_user": ("; ".join(missing) if missing else None),
-        "tips": tips,
-        "trace": trace,
+        "notes": "; ".join(missing) if missing else None,
     }
 
 
 def _final_needs_input(all_hits: List[dict], trace: List[dict], needed_fields: List[str], reason: Optional[str] = None) -> dict:
-    evidence_used = {}
-    for h in all_hits:
-        k = h.get("doc_path") or "?"
-        evidence_used.setdefault(k, []).append(h.get("chunk_idx"))
-    evidence_used_list = [{"doc": k, "hits": v[:10]} for k, v in evidence_used.items()]
-
-    alt_terms: List[str] = []
-    for h in all_hits:
-        qc = (h.get("hints") or {}).get("query_candidates") or {}
-        alt_terms.extend(list(qc.keys()))
-    alt_terms = list(dict.fromkeys(alt_terms))[:10]
-
+    if _should_log_detail():
+        log.info("🎯 FINAL RESULT: Needs more information")
+        log.info("  Reason: %s", reason or "Insufficient evidence")
+        log.info("  Missing: %s", needed_fields)
+    
     # Aggregate recommended queries from critic traces
     recommended_queries: List[str] = []
     for t in trace:
@@ -545,20 +673,10 @@ def _final_needs_input(all_hits: List[dict], trace: List[dict], needed_fields: L
             if qn and qn not in recommended_queries:
                 recommended_queries.append(qn)
 
-    tips = [
-        "Include exact feature names in queries.",
-        "Use the word 'example' or 'URL Syntax'.",
-        "Provide required IDs/channel if known to reduce ambiguity.",
-    ]
-
     return {
         "status": "needs_input",
-        "reason": reason or "Insufficient information.",
-        "evidence_used": evidence_used_list[:5],
-        "missing_info": (needed_fields or [])[:6],
-        "recommended_queries": recommended_queries[:8],
-        "alt_terms": alt_terms,
-        "ask_user": ("; ".join((needed_fields or [])[:3]) if needed_fields else None),
-        "tips": tips,
-        "trace": trace,
+        "reason": reason or "Insufficient information in documentation",
+        "missing": needed_fields,
+        "suggested_queries": recommended_queries[:3],
     }
+

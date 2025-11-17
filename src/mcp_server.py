@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, List
 
 from fastmcp import FastMCP, Context
 
@@ -10,6 +10,7 @@ from fastmcp import FastMCP, Context
 from learning_mcp.config import get_config, get_profile
 from learning_mcp.embeddings import Embedder, EmbeddingConfig
 from learning_mcp.vdb import VDB
+from learning_mcp.github_client import GitHubClient
 
 # Configure logging to show all INFO level messages including emojis
 logging.basicConfig(
@@ -22,6 +23,16 @@ log = logging.getLogger("learning_mcp.mcp_server")
 
 # Initialize MCP server
 mcp = FastMCP("learning-mcp-server", dependencies=["qdrant-client", "httpx", "pypdf"])
+
+# Initialize GitHub client (optional - only if token provided)
+_github_client = None
+
+def _get_github_client() -> GitHubClient:
+    """Get or create GitHub client"""
+    global _github_client
+    if _github_client is None:
+        _github_client = GitHubClient()
+    return _github_client
 
 
 def _get_embedder(prof: dict) -> Embedder:
@@ -211,6 +222,167 @@ async def get_profile_config(name: str) -> str:
     import yaml
     prof = get_profile(name)
     return yaml.dump(prof, default_flow_style=False)
+
+
+# ============================================================================
+# GitHub Tools
+# ============================================================================
+
+@mcp.tool
+async def search_github_repos(
+    query: str,
+    limit: int = 10,
+    sort: str = "stars",
+    ctx: Context = None
+) -> dict:
+    """
+    Search GitHub repositories.
+    
+    Use this to find repositories by keywords, topics, or usernames.
+    
+    Args:
+        query: Search query (e.g., "RAG", "RAG user:aviciot", "machine learning language:python")
+        limit: Maximum number of results to return (default 10, max 30)
+        sort: Sort results by 'stars', 'forks', or 'updated' (default 'stars')
+    
+    Returns:
+        dict with 'repositories' list containing name, description, url, stars, etc.
+    
+    Examples:
+        - "RAG user:aviciot" - Find RAG repos by user aviciot
+        - "machine learning language:python" - ML repos in Python
+        - "vector database" - Search for vector DB projects
+    """
+    if ctx:
+        ctx.info(f"Searching GitHub for: {query}")
+    
+    try:
+        github = _get_github_client()
+        repos = await github.search_repositories(
+            query=query,
+            limit=min(limit, 30),
+            sort=sort
+        )
+        
+        if ctx:
+            ctx.info(f"Found {len(repos)} repositories")
+        
+        return {
+            "query": query,
+            "count": len(repos),
+            "repositories": repos
+        }
+    except Exception as e:
+        log.error(f"GitHub search error: {e}")
+        return {
+            "error": str(e),
+            "query": query,
+            "repositories": []
+        }
+
+
+@mcp.tool
+async def get_github_file(
+    owner: str,
+    repo: str,
+    path: str,
+    ref: str = "main",
+    ctx: Context = None
+) -> dict:
+    """
+    Get contents of a file from a GitHub repository.
+    
+    Use this to read README files, source code, documentation, or any file from a repo.
+    
+    Args:
+        owner: Repository owner (username or organization)
+        repo: Repository name
+        path: Path to file (e.g., "README.md", "src/main.py")
+        ref: Branch, tag, or commit SHA (default "main")
+    
+    Returns:
+        dict with file content and metadata (name, path, size, url)
+    
+    Examples:
+        - owner="aviciot", repo="learning-mcp", path="README.md"
+        - owner="microsoft", repo="autogen", path="docs/index.md"
+    """
+    if ctx:
+        ctx.info(f"Fetching {owner}/{repo}/{path} (ref: {ref})")
+    
+    try:
+        github = _get_github_client()
+        file_data = await github.get_file_contents(
+            owner=owner,
+            repo=repo,
+            path=path,
+            ref=ref
+        )
+        
+        if ctx:
+            ctx.info(f"Retrieved file: {file_data['size']} bytes")
+        
+        return file_data
+    except Exception as e:
+        log.error(f"Error fetching GitHub file: {e}")
+        return {
+            "error": str(e),
+            "owner": owner,
+            "repo": repo,
+            "path": path
+        }
+
+
+@mcp.tool
+async def list_user_github_repos(
+    username: str,
+    limit: int = 30,
+    type_filter: str = "all",
+    ctx: Context = None
+) -> dict:
+    """
+    List all repositories for a GitHub user.
+    
+    Use this to get an overview of all repos owned by a user or organization.
+    
+    Args:
+        username: GitHub username or organization name
+        limit: Maximum number of repos to return (default 30, max 100)
+        type_filter: Filter by 'all', 'owner' (repos user owns), or 'member' (repos user contributes to)
+    
+    Returns:
+        dict with 'repositories' list sorted by most recently updated
+    
+    Examples:
+        - username="aviciot", limit=50
+        - username="microsoft", type_filter="owner"
+    """
+    if ctx:
+        ctx.info(f"Listing repositories for user: {username}")
+    
+    try:
+        github = _get_github_client()
+        repos = await github.list_user_repos(
+            username=username,
+            limit=min(limit, 100),
+            type_filter=type_filter
+        )
+        
+        if ctx:
+            ctx.info(f"Found {len(repos)} repositories")
+        
+        return {
+            "username": username,
+            "count": len(repos),
+            "repositories": repos
+        }
+    except Exception as e:
+        log.error(f"Error listing user repos: {e}")
+        return {
+            "error": str(e),
+            "username": username,
+            "repositories": []
+        }
 
 
 if __name__ == "__main__":

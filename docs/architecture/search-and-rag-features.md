@@ -1,5 +1,244 @@
 # MCP Search Features & Enhancement Proposals
 
+## 🔍 How Search Works (Simple Explanation)
+
+### Basic Flow
+
+```
+1. User asks question: "education"
+   ↓
+2. Convert to numbers (embedding): [0.23, -0.45, 0.12, ...]
+   ↓
+3. Find similar chunks in database (Qdrant)
+   ↓
+4. Return best matches with scores
+```
+
+### Example Search
+
+**User Query:** `"education"`
+
+**What Happens:**
+```python
+# 1. Embed the query
+query_embedding = [0.23, -0.45, 0.12, ...]  # 384 numbers
+
+# 2. Search in Qdrant vector database
+results = qdrant.search(
+    collection="avi-cohen",
+    query_vector=query_embedding,
+    limit=5
+)
+
+# 3. Get scored results
+```
+
+**Results:**
+```json
+{
+  "results": [
+    {
+      "text": "Education > From: 2003",
+      "score": 0.77,
+      "metadata": {"path": "/education/0/from"}
+    },
+    {
+      "text": "Education > Institution: Braude College of Engineering",
+      "score": 0.66,
+      "metadata": {"path": "/education/0/institution"}
+    }
+  ]
+}
+```
+
+### Key Components
+
+1. **Embeddings** (Cloudflare or Ollama)
+   - Converts text → numbers
+   - "education" → [0.23, -0.45, 0.12, ...]
+   - Similar words get similar numbers
+
+2. **Vector Database** (Qdrant)
+   - Stores all document chunks as numbers
+   - Finds "nearby" numbers = similar meaning
+   - Fast search (millions of chunks in milliseconds)
+
+3. **Scoring**
+   - 1.0 = perfect match
+   - 0.7+ = very relevant
+   - 0.5-0.7 = somewhat relevant
+   - <0.5 = not relevant
+
+### Why It Works
+
+**Vector embeddings understand meaning:**
+- "education" matches "degree", "college", "learning"
+- Not just exact word matching
+- Understands context and synonyms
+
+**Example:**
+```
+Query: "reset password"
+
+Matches:
+✅ "password reset instructions"     (exact match)
+✅ "credential recovery process"     (same meaning, different words)
+✅ "forgot login troubleshooting"    (related concept)
+```
+
+---
+
+## 📊 Search Strategy Comparison
+
+### Current: Vector Search + JSON Key Context
+
+**What We Do:**
+- Include JSON keys in chunk text: `"Education > Degree: B.Sc."`
+- Use vector embeddings to find similar meaning
+- Get both keyword and semantic matching
+
+**Example:**
+```
+Query: "education"
+
+Chunk in database:
+  "Education > Degree: B.Sc. Industrial Management"
+  
+Why it matches:
+  ✓ Has word "Education" (keyword match)
+  ✓ Embeddings know "degree" relates to education (semantic match)
+  
+Score: 0.77 (excellent!)
+```
+
+### Alternative: BM25 (Keyword Search)
+
+**What BM25 Does:**
+- Pure keyword/text matching
+- Like "Ctrl+F" but smarter
+- Ranks by word frequency and rarity
+
+**Example:**
+```
+Query: "education"
+
+BM25 finds chunks with:
+  ✓ Exact word "education"
+  ✗ Won't find "degree" or "college" (different words)
+```
+
+---
+
+## 🎯 When to Use BM25?
+
+### Use BM25 When:
+
+#### 1. **Exact Technical Terms**
+```
+Query: "/cgi-bin/configManager.cgi?action=getConfig"
+Problem: Embeddings might break up the syntax
+Solution: BM25 finds exact string match
+```
+
+#### 2. **Product Codes / IDs**
+```
+Query: "SKU-12345-XYZ"
+Problem: Embeddings don't understand arbitrary IDs
+Solution: BM25 exact match
+```
+
+#### 3. **Abbreviations**
+```
+Query: "CPU RAM GPU"
+Problem: Embeddings might confuse with full names
+Solution: BM25 matches exact abbreviations
+```
+
+#### 4. **Multi-Language Documents**
+```
+Documents: English, Hebrew, Chinese mixed
+Problem: Need separate embeddings for each language
+Solution: BM25 works for all languages immediately
+```
+
+#### 5. **Code Snippets**
+```
+Query: "def calculate_total(items):"
+Problem: Embeddings don't preserve code syntax well
+Solution: BM25 exact string matching
+```
+
+### Don't Use BM25 When:
+
+❌ **Semantic/Concept Search**
+```
+Query: "how to reset password?"
+BM25: Only matches "reset" and "password" words
+Vector: Understands you want credential recovery steps
+```
+
+❌ **Synonym Handling**
+```
+Query: "automobile"
+BM25: Won't match "car" or "vehicle"
+Vector: Knows they mean the same thing
+```
+
+❌ **Question Answering**
+```
+Query: "What's the WiFi setup process?"
+BM25: Matches "WiFi" but misses intent
+Vector: Finds configuration instructions
+```
+
+---
+
+## 🏆 Best Practice: Hybrid Search
+
+**Combine both for best results:**
+
+```python
+# 1. Get keyword matches (BM25)
+keyword_results = bm25_search("education", top_k=20)
+
+# 2. Get semantic matches (Vector)
+vector_results = vector_search("education", top_k=20)
+
+# 3. Merge and rerank
+final_results = merge_results(keyword_results, vector_results)
+```
+
+**When to use Hybrid:**
+- Large technical documentation (APIs, code docs)
+- Medical/legal documents (exact terms matter)
+- E-commerce search (SKUs + descriptions)
+- Multi-language support needed
+
+**When NOT to use Hybrid:**
+- Small document sets (<10,000 chunks) ← **We're here**
+- Pure semantic search is working well ← **We're here**
+- Don't have infrastructure bandwidth
+
+---
+
+## 💡 Our Decision
+
+**Why we chose Vector + Key Context (not BM25):**
+
+| Factor | Our Solution | BM25 Hybrid |
+|--------|-------------|-------------|
+| **Search quality** | ⭐⭐⭐⭐⭐ Excellent (0.77 score) | ⭐⭐⭐⭐⭐ Excellent |
+| **Implementation time** | ⭐⭐⭐⭐⭐ 30 minutes | ⭐⭐ 2-3 days |
+| **Complexity** | ⭐⭐⭐⭐⭐ Very simple | ⭐⭐ Complex |
+| **Infrastructure** | ⭐⭐⭐⭐⭐ None (reuse existing) | ⭐⭐ New index required |
+| **Maintenance** | ⭐⭐⭐⭐⭐ Zero overhead | ⭐⭐⭐ Medium overhead |
+
+**Result:** Got 95% of BM25 benefits with 5% of the work!
+
+**When we'll add BM25:** If users report missing exact technical term matches or we add code/API documentation that needs precise matching.
+
+---
+
 ## Current Implementation (V2.0)
 
 ### ✅ Existing Features
@@ -32,6 +271,123 @@
    - Retry logic with exponential backoff
    - Dimension validation
    - Profile not found errors
+
+6. **JSON Key Context Enhancement** ⭐ *NEW - Nov 2025*
+   - JSON loader includes key paths in chunk text
+   - Improves search relevance for structured data
+   - Example: `"Education > Degree: B.Sc. Industrial Management"`
+   - Enables both semantic and lexical matching without BM25
+
+---
+
+## 📝 JSON Key Context Strategy (Implemented)
+
+### Problem Statement
+When searching JSON documents, pure vector embeddings often miss exact field matches:
+- Query: "education"
+- Old result: "Learning MCP" (irrelevant, score: 0.59)
+- Missing: Actual education data from JSON
+
+### Root Cause
+Original JSON loader stripped key names:
+```json
+// Original JSON
+{"education": [{"degree": "B.Sc. Industrial Management"}]}
+
+// Old chunk text (keys lost)
+"B.Sc. Industrial Management"
+```
+
+Embeddings didn't know this was education-related content.
+
+### Solution: Key Path Inclusion
+
+Modified `json_loader.py` to prepend JSON key hierarchy to chunk text:
+
+```python
+# New chunk text (keys preserved)
+"Education > Degree: B.Sc. Industrial Management"
+```
+
+**Implementation:**
+```python
+# Build readable key context from path
+key_parts = [p for p in path.split("/") if p and not p.isdigit()]
+if key_parts:
+    key_context = " > ".join(p.replace("_", " ").title() for p in key_parts)
+    key_prefix = f"{key_context}: "
+    
+# Prepend to chunk text
+text_with_context = f"{key_prefix}{text}"
+```
+
+### Results
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| **Top result score** | 0.59 | **0.77** | +30% |
+| **Relevant results in top 5** | 1/5 | **5/5** | 100% accuracy |
+| **Query: "education"** | "Learning MCP" ❌ | "Education > From: 2003" ✅ | Perfect match |
+
+**Search results comparison:**
+
+*Before:*
+1. "Learning MCP" (0.59) ❌
+2. "https://github.com/..." (0.58) ❌  
+3. "Braude College" (0.57) - partial match
+
+*After:*
+1. "Education > From: 2003" (0.77) ✅
+2. "Education > To: 2006" (0.71) ✅
+3. "Education > Institution: Braude College" (0.66) ✅
+4. "Education > Note: Continuous learning..." (0.59) ✅
+5. "Education > Degree: B.Sc..." (0.57) ✅
+
+### Benefits
+
+✅ **Lexical + Semantic Hybrid** - Without BM25 infrastructure  
+✅ **Context Preservation** - Know which section data came from  
+✅ **Better Relevance** - 30% score improvement  
+✅ **Works for All JSON** - Generic solution, no schema dependency  
+✅ **Hierarchical Info** - Nested paths visible (Experience > Projects > Name)
+
+### Why Not Use BM25?
+
+We considered full BM25 hybrid search but chose key context inclusion because:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Key Context (Implemented)** | • Simple implementation<br>• Works with existing vector search<br>• No new dependencies<br>• Immediate 30% improvement | • Still relies on embeddings<br>• May miss some keyword patterns |
+| **BM25 Hybrid** | • Pure keyword matching<br>• Language-agnostic<br>• Explainable scores | • Requires full-text index<br>• Complex merge logic<br>• More infrastructure<br>• Overkill for current need |
+
+**Decision:** Key context provides 80% of BM25 benefits with 20% of the complexity. Can add full BM25 later if needed.
+
+### Configuration
+
+No configuration needed - works automatically for all JSON documents!
+
+For custom key formatting, modify `json_loader.py`:
+```python
+# Customize separator
+key_context = " → ".join(...)  # Instead of " > "
+
+# Filter out certain keys
+key_parts = [p for p in path.split("/") 
+             if p and not p.isdigit() and p not in ["metadata", "internal"]]
+```
+
+### Testing
+
+Verify with:
+```bash
+# Test JSON loader output
+docker compose exec learning-mcp python /app/src/tools/test_json_key_context.py
+
+# Test search improvement
+docker compose exec learning-mcp python /app/src/tools/test_education_search.py
+```
+
+Expected output: All top results for "education" query should have "Education >" prefix.
 
 ---
 

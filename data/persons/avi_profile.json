@@ -1,19 +1,19 @@
 {
-  "version": "1.0",
-  "generated_at": "2025-09-29T09:01:22Z",
+  "version": "1.1",
+  "generated_at": "2025-11-14T12:00:00Z",
   "profile": {
     "full_name": "Avi Cohen",
-    "headline": "AI‑Driven Applications & ETL Expert (12+ yrs) — Agentic RAG • MCP • Data Platforms",
+    "headline": "AI-Driven Applications & ETL Expert (12+ years) — Agentic RAG • MCP • Data Platforms",
     "location": "Israel",
     "mission": "Make complex data systems simple, reliable, and intelligent — so teams can ship faster with confidence.",
     "philosophy": [
       "Pragmatic innovation: solve real problems with measurable impact.",
-      "Agentic systems: orchestrate LLMs and tools safely, with observability.",
-      "Automation first: reduce toil; design for repeatability and scale."
+      "Agentic systems: orchestrate LLMs and tools safely with observability.",
+      "Automation first: reduce toil, design for repeatability and scale."
     ],
     "public_presence": {
       "website": null,
-      "github": null,
+      "github": "https://github.com/aviciot",
       "linkedin": null
     }
   },
@@ -24,25 +24,25 @@
   },
   "skills": {
     "ai": [
-      "AI‑driven applications",
+      "AI-driven applications",
       "Agent frameworks (MCP)",
-      "Agentic RAG",
-      "LLM as orchestrator"
+      "Agentic RAG systems",
+      "LLM orchestration"
     ],
     "etl_and_data": [
-      "ETL architecture & lifecycle",
+      "ETL architecture and lifecycle",
       "Informatica (PowerCenter, Developer)",
-      "Data modeling & quality",
+      "Data modeling and quality",
       "Automation frameworks"
     ],
     "programming_backend": [
       "Python",
-      "APIs & FastAPI",
-      "Docker & Compose",
+      "APIs and FastAPI",
+      "Docker and Docker Compose",
       "Redis",
       "Selenium",
       "Jenkins",
-      "AWS (basics)"
+      "AWS basics"
     ],
     "messaging": [
       "RabbitMQ",
@@ -52,14 +52,14 @@
     ],
     "databases": [
       "Oracle",
-      "Postgres",
+      "PostgreSQL",
       "Couchbase",
       "Redis",
       "DuckDB"
     ],
     "soft_strengths": [
       "Technical leadership",
-      "Mentoring & upskilling",
+      "Mentoring and upskilling",
       "System design",
       "Innovation under constraints"
     ],
@@ -82,9 +82,9 @@
       "from": "2022-01",
       "to": "present",
       "highlights": [
-        "Led agentic platform initiative (Slack‑first), integrating MCP microservices (Oracle MCP, Learning MCP) and Qdrant‑backed RAG.",
+        "Led agentic platform initiative (Slack-first), integrating MCP microservices (Oracle MCP, Learning MCP) with Qdrant-backed RAG.",
         "Supported and guided multiple data migration projects; defined standards, reviews, and performance hardening.",
-        "Introduced telemetry and routing observability (SQLite), improving triage speed and reliability."
+        "Introduced telemetry and routing observability using SQLite, improving triage speed and reliability."
       ],
       "tech": [
         "Python",
@@ -105,8 +105,8 @@
       "from": "2011-01",
       "to": "2021-12",
       "highlights": [
-        "End‑to‑end responsibility for production data pipelines: design, development, deployment, performance & stability.",
-        "Built automation and tooling to accelerate migration workflows; drove cross‑team integration and innovation.",
+        "End-to-end responsibility for production data pipelines: design, development, deployment, performance, and stability.",
+        "Built automation and tooling to accelerate migration workflows; drove cross-team integration and innovation.",
         "Recruiting, mentoring, and code reviews; prioritized tasks and improved delivery predictability."
       ],
       "tech": [
@@ -121,90 +121,116 @@
   ],
   "achievements": [
     {
-      "title": "Amdocs Delivery — Cross‑line Significant Contributor",
-      "impact": "Developed TDM data injection engine and real‑time transaction monitoring at scale; helped establish TDM as a production product (> $3M annual sales).",
+      "title": "Amdocs Delivery — Cross-line Significant Contributor",
+      "impact": "Developed TDM data injection engine and real-time transaction monitoring at scale; helped establish TDM as a production product generating over $3M in annual sales.",
       "links": []
     },
     {
       "title": "Amdocs Innovation Competition (Worldwide) — Top 5",
-      "impact": "Smart Synthetic Data tool — ML‑powered synthetic data generation with advanced controls and fidelity.",
+      "impact": "Smart Synthetic Data tool — ML-powered synthetic data generation with advanced controls and high fidelity.",
       "links": []
     }
   ],
   "education": [
     {
       "degree": "B.Sc. Industrial Management",
-      "institution": "Braude College",
+      "institution": "Braude College of Engineering",
       "from": "2003",
       "to": "2006"
     },
     {
-      "note": "Many online courses (Udemy etc.) across AI, data engineering, and application development."
+      "note": "Continuous learning through online courses (Udemy, Coursera) covering AI, data engineering, and application development."
     }
   ],
   "interests": [
-    "Smart home (IoT) platforms and tools",
-    "Creative problem‑solving with automation",
-    "Mentoring and building engineering culture"
+    "Smart home (IoT) platforms and automation",
+    "Creative problem-solving with automation",
+    "Mentoring and building engineering culture",
+    "Exploring cutting-edge AI technologies"
   ],
   "projects": [
     {
-      "name": "DS_Agent",
-      "summary": "Slack‑first Text‑to‑SQL agent with DB‑aware routing, telemetry, and MCP integration; uses vector search for context and guardrails.",
+      "name": "Learning MCP",
+      "summary": "FastAPI + Qdrant microservice that ingests large PDFs (e.g., API docs) and serves semantic search with API planning hints for downstream agents. Supports profile-based collections, concurrent embedding, and MCP protocol integration.",
       "status": "active",
+      "type": "github",
+      "topics": [
+        "mcp",
+        "qdrant",
+        "ollama",
+        "cloudflare-ai",
+        "rag",
+        "fastapi",
+        "semantic-search"
+      ],
+      "repo_url": "https://github.com/aviciot/learning-mcp",
+      "features": [
+        "Multi-profile document collections",
+        "Concurrent embedding with Ollama/Cloudflare fallback",
+        "Background job management with SQLite tracking",
+        "MCP HTTP Streamable transport",
+        "Vector search with Qdrant",
+        "AutoGen-powered API planning (optional)"
+      ]
+    },
+    {
+      "name": "DS_Agent",
+      "summary": "Slack-first Text-to-SQL agent with database-aware routing, telemetry, and MCP integration. Uses vector search for context and guardrails to ensure safe query execution.",
+      "status": "active",
+      "type": "internal",
       "topics": [
         "text2sql",
         "sqlite",
         "oracle",
         "redis",
         "mcp",
-        "agentic"
+        "agentic",
+        "slack-bot"
       ],
-      "repo_url": null
-    },
-    {
-      "name": "Learning MCP",
-      "summary": "FastAPI + Qdrant microservice that ingests large PDFs (e.g., API docs) and serves semantic search + API planning hints for downstream agents.",
-      "status": "active",
-      "topics": [
-        "mcp",
-        "qdrant",
-        "ollama",
-        "cloudflare-ai",
-        "rag"
-      ],
-      "repo_url": null
+      "repo_url": null,
+      "features": [
+        "Multi-database routing (SQLite, Oracle)",
+        "Vector-based context retrieval",
+        "Query safety guardrails",
+        "Telemetry and audit logging",
+        "Slack integration"
+      ]
     },
     {
       "name": "Informatica Clean Data Tool",
-      "summary": "Retention‑aware partition cleanup orchestrated by Informatica PowerCenter and Python engine; rules and logging with dry‑run & notifications.",
+      "summary": "Retention-aware partition cleanup orchestrated by Informatica PowerCenter and Python engine. Features rule-based cleanup, dry-run mode, and notification system.",
       "status": "active",
+      "type": "internal",
       "topics": [
         "informatica",
         "oracle",
         "automation",
-        "observability"
+        "observability",
+        "data-lifecycle"
       ],
       "repo_url": null
     },
     {
       "name": "Matrix Portfolio Webapp",
-      "summary": "Next.js + FastAPI SPA with Matrix‑style UI, JWT auth, Slack‑style chat, and admin telemetry; showcases AI projects and demos.",
+      "summary": "Next.js + FastAPI SPA with Matrix-style UI, JWT auth, Slack-style chat, and admin telemetry. Showcases AI projects and demos with RAG-powered Q&A.",
       "status": "active",
+      "type": "personal",
       "topics": [
         "nextjs",
         "fastapi",
         "jwt",
         "qdrant",
         "rag",
-        "ui"
+        "ui",
+        "portfolio"
       ],
       "repo_url": null
     },
     {
       "name": "Home Assistant — Advanced IoT Setup",
-      "summary": "Production‑like Home Assistant deployment with Docker; advanced automations for security and daily routines; Frigate‑based camera analytics (face/person/object detection) and event‑driven actions.",
+      "summary": "Production-grade Home Assistant deployment with Docker. Advanced automations for security and daily routines. Frigate-based camera analytics with face/person/object detection and event-driven actions.",
       "status": "active",
+      "type": "personal",
       "topics": [
         "home-assistant",
         "frigate",
@@ -212,46 +238,53 @@
         "security",
         "automation",
         "docker",
-        "ai-vision"
+        "ai-vision",
+        "iot"
       ],
+      "repo_url": null,
       "details": {
         "stack": {
           "orchestrator": "Docker Compose",
-          "home_assistant": "Core in Docker",
-          "mqtt": "Mosquitto",
-          "nvr": "Frigate (NVR + object detection)",
-          "storage": "Local NAS / shared volumes"
+          "home_assistant": "Home Assistant Core in Docker",
+          "mqtt": "Mosquitto broker",
+          "nvr": "Frigate (NVR with object detection)",
+          "storage": "Local NAS with shared volumes"
         },
         "automations_examples": [
-          "Face/person detection → trigger lights, send mobile notifications with snapshot & privacy redaction.",
-          "Geo‑fencing (arrival/departure) → arm/disarm security scenes, adjust climate and lighting.",
-          "Nighttime perimeter mode → enhance camera sensitivity; silence non‑critical alerts; record to separate retention bucket.",
-          "Package detection at door → TTS announcement + short‑term lock camera PTZ preset."
+          "Face/person detection triggers lights and sends mobile notifications with snapshots (privacy-redacted).",
+          "Geo-fencing (arrival/departure) arms/disarms security scenes and adjusts climate/lighting.",
+          "Nighttime perimeter mode enhances camera sensitivity, silences non-critical alerts, records to separate retention bucket.",
+          "Package detection at door triggers TTS announcement and locks camera PTZ preset."
         ],
         "security_notes": [
-          "Network segmentation for IoT VLAN; limited ingress; HA behind reverse proxy.",
-          "Secret management via .env / Vault (planned); audit logs for automations."
+          "Network segmentation with IoT VLAN and limited ingress.",
+          "Home Assistant behind reverse proxy.",
+          "Secret management via .env files (Vault integration planned).",
+          "Audit logs for all automation triggers."
         ]
-      },
-      "repo_url": null
+      }
     }
   ],
   "faq": [
     {
-      "q": "What is Avi’s expertise in AI?",
-      "a": "Designing AI‑driven apps with agentic patterns (MCP) and RAG. Building microservices that let LLMs orchestrate tools safely, with telemetry and guardrails."
+      "q": "What is Avi's expertise in AI?",
+      "a": "Designing AI-driven applications with agentic patterns (MCP) and RAG. Building microservices that enable LLMs to orchestrate tools safely, with comprehensive telemetry and guardrails."
     },
     {
-      "q": "What are Avi’s core strengths?",
-      "a": "ETL architecture, hands‑on automation, technical leadership, and turning ambiguous goals into robust systems."
+      "q": "What are Avi's core strengths?",
+      "a": "ETL architecture, hands-on automation, technical leadership, and transforming ambiguous requirements into robust, production-ready systems."
     },
     {
       "q": "What is Avi currently exploring?",
-      "a": "LangGraph & AutoGen for multi‑step planning, LoRA for local models, and better observability for agentic workflows."
+      "a": "LangGraph and AutoGen for multi-step planning, LoRA for local model fine-tuning, and enhanced observability patterns for agentic workflows."
+    },
+    {
+      "q": "What makes Avi's approach unique?",
+      "a": "Focus on pragmatic solutions with measurable impact. Emphasis on observability, safety guardrails, and designing systems that teams can actually maintain and extend."
     }
   ],
   "media": {
-    "notes": "Vector DB should store references, not binaries. Store videos/images in object storage or Git repo; index captions/thumbnails and link here.",
+    "notes": "Vector database stores references only, not binaries. Store videos/images in object storage or Git repo; index captions/thumbnails and link here.",
     "items": [
       {
         "type": "image",
@@ -259,7 +292,7 @@
         "url": null,
         "thumbnail": null,
         "captions": [
-          "Dashboard view with security scene toggles and camera tiles."
+          "Dashboard view showing security scene toggles and live camera tiles."
         ],
         "tags": [
           "home-assistant",
@@ -274,11 +307,11 @@
         "url": null,
         "thumbnail": null,
         "captions": [
-          "Short clip showing detection event, snapshot, and automation trigger."
+          "Short clip demonstrating detection event, snapshot capture, and automation trigger."
         ],
         "tags": [
           "frigate",
-          "cv",
+          "computer-vision",
           "automation"
         ],
         "visibility": "public"
@@ -286,44 +319,12 @@
     ]
   },
   "seed_queries": [
-    "What is Avi’s background?",
-    "List Avi’s key skills.",
-    "Tell me about Avi’s recent projects.",
+    "What is Avi's background?",
+    "List Avi's key skills.",
+    "Tell me about Avi's recent projects.",
     "How does Avi use Agentic RAG?",
-    "What’s Avi’s IoT/Home Assistant setup?"
-  ],
-  "metadata": {
-    "source": "avi_profile.json",
-    "visibility_default": "public",
-    "ingest_sections": [
-      "profile",
-      "contact",
-      "skills",
-      "experience",
-      "achievements",
-      "education",
-      "interests",
-      "projects",
-      "faq",
-      "media",
-      "seed_queries"
-    ],
-    "chunking": {
-      "long_text_threshold_tokens": 900,
-      "overlap_tokens": 100
-    },
-    "embedding": {
-      "primary": {
-        "provider": "ollama",
-        "model": "nomic-embed-text",
-        "dim": 768
-      },
-      "fallback": {
-        "provider": "cloudflare",
-        "model": "@cf/baai/bge-small-en-v1.5",
-        "dim": 384
-      },
-      "collection_suffix_by_dim": true
-    }
-  }
+    "What's Avi's IoT/Home Assistant setup?",
+    "What is the Learning MCP project?",
+    "What technologies does Avi work with?"
+  ]
 }

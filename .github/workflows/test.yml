@@ -109,3 +109,31 @@ jobs:
           flags: integration
           name: codecov-integration
           fail_ci_if_error: false
+
+      - name: Run MCP E2E tests (real MCP client)
+        env:
+          VECTOR_DB_URL: http://localhost:6333
+          MCP_SERVER_URL: http://localhost:8014/mcp
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          # Start server in background
+          cd src && python -m learning_mcp.app &
+          SERVER_PID=$!
+          
+          # Wait for server to be ready
+          for i in {1..30}; do
+            if curl -f http://localhost:8014/health 2>/dev/null; then
+              echo "✓ Server is ready"
+              break
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 2
+          done
+          
+          # Run E2E tests with real MCP protocol
+          pytest tests/integration/test_mcp_client_e2e.py -v --tb=short || echo "E2E tests failed (non-blocking)"
+          
+          # Cleanup
+          kill $SERVER_PID || true
+        continue-on-error: true

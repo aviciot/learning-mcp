@@ -34,7 +34,9 @@
       - JOB_PORT=8014
       - VECTOR_DB_URL=http://vector-db:6333
       - OLLAMA_HOST=http://host.docker.internal:11434
-      - USE_AUTOGEN=0
+      - USE_AUTOGEN=1
+      - AUTOGEN_LOG_LEVEL=minimal
+      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}
     ports:
       - "8013:8013"  # MCP server (SSE)
       - "8014:8014"  # Job server (HTTP REST)

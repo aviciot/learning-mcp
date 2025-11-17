@@ -20,9 +20,9 @@ Learning MCP is a FastAPI-based RAG (Retrieval-Augmented Generation) system with
 - **[AutoGen Multi-Agent Planner](docs/architecture/autogen-multi-agent-planner.md)** - How AI agents generate API plans
 - **[Cloudflare AI Gateway](docs/architecture/cloudflare-ai-gateway.md)** - Gateway setup and configuration
 - **[Search & RAG Features](docs/architecture/search-and-rag-features.md)** - Vector search architecture
+- **[GitHub Integration](docs/development/github-integration.md)** - GitHub repository search and file access
+- **[Integrating External MCPs](docs/development/integrating-external-mcps.md)** - How to add external MCP functionality
 - **[MCP Testing Guide](docs/development/mcp-testing-guide.md)** - Testing strategies and examples
-
-## 🚀 Quick Start
 
 ## 🚀 Quick Start
 
@@ -88,8 +88,6 @@ Using MCPJam, Claude Desktop, or any MCP client:
 
 ## ⚙️ Configuration
 
-## ⚙️ Configuration
-
 ### Environment Variables
 
 Key variables in `.env`:
@@ -111,6 +109,9 @@ AUTOGEN_BACKEND=groq
 GROQ_API_KEY=gsk_...
 OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/{account}/omni/compat
 CF_GATEWAY_TOKEN=your_gateway_token
+
+# === GitHub Integration (Optional) ===
+GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your_token_here
 
 # === Servers ===
 PORT=8013
@@ -155,8 +156,15 @@ See **[docs/README.md](docs/README.md)** for complete configuration guide.
 
 ```
 ┌─────────────────────────────────────────┐
-│  MCP Server (FastMCP - Port 8013)       │
-│  Tools: search_docs, plan_api_call      │
+│  Docker Container (learning-mcp)        │
+│  ┌────────────────────────────────────┐ │
+│  │ Supervisord (Process Manager)      │ │
+│  │  ├─ MCP Server (Port 8013)         │ │
+│  │  │  Tools: search_docs,            │ │
+│  │  │         plan_api_call           │ │
+│  │  └─ Job Server (Port 8014)         │ │
+│  │     Background Ingestion           │ │
+│  └────────────────────────────────────┘ │
 └─────────────────────────────────────────┘
                    │
         ┌──────────┼──────────┐
@@ -167,21 +175,24 @@ See **[docs/README.md](docs/README.md)** for complete configuration guide.
    │ Vector  │ │ (CF/ │ │ Planner │
    │   DB    │ │Ollama│ │ +Critic │
    └─────────┘ └──────┘ └─────────┘
-                   │
-                   ▼
-        ┌──────────────────────┐
-        │ Job Server (Port 8014│
-        │ Background Ingestion │
-        └──────────────────────┘
 ```
 
+**Multi-Service Setup:**
+- Both servers run in **one Docker container** using Supervisord
+- Supervisord manages both FastAPI processes, auto-restarts on failure
+- Configuration: `docker/supervisord.conf`
+
 ## 📡 API Reference
+
 ### MCP Tools (Port 8013 - /mcp)
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `search_docs` | Vector similarity search over ingested documents | `query`, `profile`, `top_k` |
-| `plan_api_call` | AutoGen-powered API planning with evidence retrieval | `query`, `profile`, `autogen_model` |
+| `search_docs` | **Document Search** - Vector similarity search over ingested documentation. Returns ranked chunks with metadata and scores. | `q` (query text), `profile` (doc set), `top_k` (result limit, default 5) |
+| `plan_api_call` | **API Planning** - AutoGen multi-agent system generates API calls from natural language using planner + critic loop. Requires documentation ingestion first. | `q` (goal description), `profile` (API docs), `autogen_model` (optional LLM) |
+| `search_github_repos` | **GitHub Search** - Search GitHub repositories by query. Supports advanced search syntax (user:, org:, language:, stars:). Requires GITHUB_PERSONAL_ACCESS_TOKEN. | `query` (search text), `limit` (max results, default 10) |
+| `get_github_file` | **GitHub File Reader** - Retrieve file contents from any accessible GitHub repository. Returns decoded content with metadata. | `owner` (repo owner), `repo` (repo name), `path` (file path), `ref` (branch/tag, default: main) |
+| `list_user_github_repos` | **GitHub Repo List** - List all repositories for a GitHub user or organization. Returns name, description, stars, language. | `username` (GitHub user/org), `limit` (max results, default 10) |
 
 **Swagger UI**: `http://localhost:8013/docs`
 
@@ -196,33 +207,41 @@ See **[docs/README.md](docs/README.md)** for complete configuration guide.
 
 See **[docs/README.md](docs/README.md)** for complete API reference with examples.
 
-##  Testing
+## 🧪 Testing
 
-``powershell
-# Test MCP tools via HTTP
-curl http://localhost:8013/mcp
+```powershell
+# Health check
+curl http://localhost:8014/health
 
-# Search test
-curl -X POST http://localhost:8013/search/api_context -H "Content-Type: application/json" -d '{\"q\":\"wifi settings\",\"profile\":\"dahua-camera\"}'
+# Start document ingestion
+curl -X POST http://localhost:8014/ingest/jobs -H "Content-Type: application/json" -d '{"profile":"dahua-camera","truncate":true}'
 
-# AutoGen planner test
-curl -X POST http://localhost:8013/agent/api -H "Content-Type: application/json" -d '{\"q\":\"enable audio\",\"profile\":\"dahua-camera\"}'
-``
+# Check job status
+curl http://localhost:8014/jobs
+
+# Test document search (via HTTP)
+curl -X POST http://localhost:8013/search/api_context -H "Content-Type: application/json" -d '{"q":"wifi settings","profile":"dahua-camera"}'
+
+# Test GitHub search
+curl -X POST http://localhost:8013/tools/call -H "Content-Type: application/json" -d '{"name":"search_github_repos","arguments":{"query":"Python RAG","limit":5}}'
+```
 
 See **[docs/development/mcp-testing-guide.md](docs/development/mcp-testing-guide.md)** for comprehensive testing strategies.
 
-##  Development
+## 💻 Development
 
-``
+```
 src/
- learning_mcp/
+  learning_mcp/
     app.py              # FastAPI entrypoint + MCP integration
+    mcp_server.py       # MCP server with tool definitions
     embeddings.py       # Ollama/Cloudflare embedding with fallback
     vdb.py              # Qdrant vector DB wrapper
     autogen_agent.py    # Multi-agent planner (planner + critic)
+    github_client.py    # GitHub API integration
     routes/             # API endpoints by concern
- tools/                  # CLI utilities
-``
+  tools/                # CLI utilities
+```
 
 **Adding a new document type:**
 1. Implement loader in `src/learning_mcp/<type>_loader.py` returning `List[Chunk]`
@@ -230,8 +249,9 @@ src/
 3. Add to profile YAML: `documents: [{type: <type>, path: ...}]`
 
 **Adding a new MCP tool:**
-1. Create route in `routes/` with `@mcp.tool()` decorator
-2. Include in `mcp.include_operations` in `app.py`
+1. Add tool function to `src/mcp_server.py` with `@mcp.tool()` decorator
+2. Implement business logic (can call routes or use clients directly)
+3. Test with MCP Inspector or Swagger UI
 
 See **[Architecture Docs](docs/architecture/)** for detailed system design.
 
@@ -247,18 +267,20 @@ See **[Architecture Docs](docs/architecture/)** for detailed system design.
 
 See **[docs/README.md#troubleshooting](docs/README.md#troubleshooting)** for complete guide.
 
-##  Resources
+## 📚 Resources
 
 - **[Documentation Hub](docs/README.md)** - Complete guides and architecture docs
 - **[AutoGen Multi-Agent Planner](docs/architecture/autogen-multi-agent-planner.md)** - How the planner + critic loop works
 - **[Search & RAG Features](docs/architecture/search-and-rag-features.md)** - Vector search internals
+- **[GitHub Integration](docs/development/github-integration.md)** - GitHub API setup and usage
+- **[Integrating External MCPs](docs/development/integrating-external-mcps.md)** - Adding external functionality
 - **[MCP Testing Guide](docs/development/mcp-testing-guide.md)** - Testing strategies
 
-##  License
+## 📄 License
 
 MIT License - See [LICENSE](LICENSE) for details
 
-##  Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create feature branch: `git checkout -b feature/your-feature`
@@ -266,7 +288,7 @@ MIT License - See [LICENSE](LICENSE) for details
 4. Test with Docker Compose: `docker compose up --build`
 5. Submit PR with clear description
 
-##  Links
+## 🔗 Links
 
 - **Repository**: https://github.com/yourusername/learning-mcp
 - **Issues**: https://github.com/yourusername/learning-mcp/issues

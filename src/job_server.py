@@ -12,6 +12,13 @@ from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+# Configure logging to show all INFO level messages including AutoGen flow
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 # Reuse existing infrastructure
 from learning_mcp.config import settings, get_profile
 from learning_mcp.embeddings import EmbeddingConfig, Embedder
@@ -22,6 +29,8 @@ from learning_mcp.document_loaders import (
     known_document_count,
     estimate_pages_total,
 )
+from learning_mcp.search_routes import router as search_router
+from learning_mcp.config_routes import router as config_router
 
 log = logging.getLogger("learning_mcp.job_server")
 
@@ -40,6 +49,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include search routes for AutoGen
+app.include_router(search_router, prefix="", tags=["Search"])
+app.include_router(config_router, prefix="", tags=["Config"])
 
 # In-memory task registry (job_id -> asyncio.Task)
 _RUNNING_TASKS: Dict[str, asyncio.Task] = {}

@@ -156,12 +156,23 @@ def load_json(
         title = (path.split("/")[-1] or "/")
         section = "json"
         source_id = path
+        
+        # Build readable key context from path (e.g., "/education" -> "Education")
+        # For nested paths like "/experience/0/company" -> "Experience > Company"
+        key_parts = [p for p in path.split("/") if p and not p.isdigit()]
+        if key_parts:
+            key_context = " > ".join(p.replace("_", " ").title() for p in key_parts)
+            key_prefix = f"{key_context}: "
+        else:
+            key_prefix = ""
 
         if isinstance(val, str):
             text = _normalize_text(val)
             if not text:
                 continue
-            slices = _sentence_aware_chunks(text, chunk_size, chunk_overlap)
+            # Prepend key context to make chunks searchable by key names
+            text_with_context = f"{key_prefix}{text}"
+            slices = _sentence_aware_chunks(text_with_context, chunk_size, chunk_overlap)
             for s in slices:
                 out.append({
                     "text": s,
@@ -174,8 +185,10 @@ def load_json(
                     },
                 })
         elif isinstance(val, (int, float, bool)):
+            # Include key context for primitive values too
+            text_with_context = f"{key_prefix}{val}"
             out.append({
-                "text": str(val),
+                "text": text_with_context,
                 "metadata": {
                     "section": section,
                     "title": title,
@@ -191,7 +204,8 @@ def load_json(
             s = _normalize_text(json.dumps(val, ensure_ascii=False))
             if not s:
                 continue
-            slices = _sentence_aware_chunks(s, chunk_size, chunk_overlap)
+            text_with_context = f"{key_prefix}{s}"
+            slices = _sentence_aware_chunks(text_with_context, chunk_size, chunk_overlap)
             for c in slices:
                 out.append({
                     "text": c,
