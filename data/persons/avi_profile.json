@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "generated_at": "2025-11-14T12:00:00Z",
+  "generated_at": "2025-11-18T12:00:00Z",
   "profile": {
     "full_name": "Avi Cohen",
     "headline": "AI-Driven Applications & ETL Expert (12+ years) — Agentic RAG • MCP • Data Platforms",
@@ -17,8 +17,17 @@
       "linkedin": null
     }
   },
+  "bio": {
+    "expertise": "Designing AI-driven applications with agentic patterns (MCP) and RAG. Building microservices that enable LLMs to orchestrate tools safely, with comprehensive telemetry and guardrails.",
+    "core_strengths": "ETL architecture, hands-on automation, technical leadership, and transforming ambiguous requirements into robust, production-ready systems.",
+    "current_exploration": "LangGraph and AutoGen for multi-step planning, LoRA for local model fine-tuning, and enhanced observability patterns for agentic workflows.",
+    "unique_approach": "Focus on pragmatic solutions with measurable impact. Emphasis on observability, safety guardrails, and designing systems that teams can actually maintain and extend."
+  },
   "contact": {
-    "email": null,
+    "full_name": "Avi Cohen",
+    "address": "Israel, Akko Zvulun 2",
+    "cellphone": "0542283899",
+    "email": "avicio@gmail.com",
     "calendly": null,
     "visibility": "private"
   },
@@ -263,24 +272,6 @@
           "Audit logs for all automation triggers."
         ]
       }
-    }
-  ],
-  "faq": [
-    {
-      "q": "What is Avi's expertise in AI?",
-      "a": "Designing AI-driven applications with agentic patterns (MCP) and RAG. Building microservices that enable LLMs to orchestrate tools safely, with comprehensive telemetry and guardrails."
-    },
-    {
-      "q": "What are Avi's core strengths?",
-      "a": "ETL architecture, hands-on automation, technical leadership, and transforming ambiguous requirements into robust, production-ready systems."
-    },
-    {
-      "q": "What is Avi currently exploring?",
-      "a": "LangGraph and AutoGen for multi-step planning, LoRA for local model fine-tuning, and enhanced observability patterns for agentic workflows."
-    },
-    {
-      "q": "What makes Avi's approach unique?",
-      "a": "Focus on pragmatic solutions with measurable impact. Emphasis on observability, safety guardrails, and designing systems that teams can actually maintain and extend."
     }
   ],
   "media": {
