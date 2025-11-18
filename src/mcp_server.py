@@ -62,7 +62,7 @@ def _get_vdb(prof: dict) -> VDB:
 if "search_docs" in enabled_tools:
     @mcp.tool
     async def search_docs(
-        q: str,
+        query: str,
         profile: str,
         top_k: int = 5,
         ctx: Context = None
@@ -71,7 +71,7 @@ if "search_docs" in enabled_tools:
         Semantic search over documents in a profile's collection.
         
         Args:
-            q: Natural language query
+            query: Natural language query
             profile: Profile name (e.g., 'avi-cohen', 'dahua-camera')
             top_k: Number of results to return (default 5, max 20)
         
@@ -79,14 +79,14 @@ if "search_docs" in enabled_tools:
             dict with 'results' (list of scored chunks) and 'metadata'
         """
         if ctx:
-            ctx.info(f"Searching profile '{profile}' for: {q[:50]}...")
+            ctx.info(f"Searching profile '{profile}' for: {query[:50]}...")
         
         prof = get_profile(profile)
         embedder = _get_embedder(prof)
         vdb = _get_vdb(prof)
         
         # Embed query
-        query_vecs = await embedder.embed([q])
+        query_vecs = await embedder.embed([query])
         query_vec = query_vecs[0]
         
         # Search Qdrant
@@ -117,7 +117,7 @@ if "search_docs" in enabled_tools:
                 "profile": profile,
                 "collection": collection,
                 "top_k": top_k,
-                "query": q
+                "query": query
             }
         }
 
@@ -206,7 +206,7 @@ if "plan_api_call" in enabled_tools:
         
         # Use AutoGen planner
         plan = await plan_with_autogen(
-            q=goal,
+            query=goal,
             profile=profile
         )
         

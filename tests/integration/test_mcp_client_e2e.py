@@ -90,7 +90,7 @@ async def test_search_docs_tool():
         result = await client.call_tool(
             "search_docs",
             arguments={
-                "q": "job status",
+                "query": "job status",
                 "profile": "informatica-cloud",
                 "top_k": 5
             }

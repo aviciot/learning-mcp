@@ -331,14 +331,14 @@ def _valid_endpoint(endpoint: str, allow_pattern: str, forbid_patterns: List[str
 # -----------------------
 # Main entry
 # -----------------------
-async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any]:
+async def plan_with_autogen(query: str, profile: str | None = None) -> Dict[str, Any]:
     """
     Generate an API call plan using a planner+critic loop with YAML-driven
     system messages. Returns enriched payload on success or needs_input on failure.
     """
     # Always log flow start (both minimal and full)
     log.info("=" * 80)
-    log.info("🚀 AUTOGEN: %s [%s]", q, profile or "default")
+    log.info("🚀 AUTOGEN: %s [%s]", query, profile or "default")
     if _should_log_detail():
         log.info("  Backend: %s | Model: %s | Gateway: %s", BACKEND, MODEL, USE_AI_GATEWAY)
     log.info("=" * 80)
@@ -378,7 +378,7 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
     # Loop state
     trace: List[dict] = []
     all_hits: List[dict] = []
-    queries: List[str] = [q]
+    queries: List[str] = [query]
 
     session_start = time.time()
     total_llm_calls = 0
@@ -433,7 +433,7 @@ async def plan_with_autogen(q: str, profile: str | None = None) -> Dict[str, Any
             "Given the EVIDENCE below and the USER QUERY, produce STRICT JSON.\n"
             "Required keys: endpoint (string), method (string), params (object), provenance (object with top_hit).\n"
             "Do NOT include code fences or commentary—JSON only.\n"
-            f"USER QUERY: {q}\n\n"
+            f"USER QUERY: {query}\n\n"
             f"EVIDENCE (top-3): {json.dumps(preview, ensure_ascii=False)}"
         )
         try:

@@ -67,7 +67,7 @@ async def test_search_http():
             "params": {
                 "name": "search_docs",
                 "arguments": {
-                    "q": "projects",
+                    "query": "projects",
                     "profile": "avi-cohen",
                     "top_k": 3
                 }
